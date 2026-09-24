@@ -1,0 +1,65 @@
+name: Publish release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^ \* Version: \(.*\)$/\1/p' rar-woo-stock-order.php | head -1)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build canonical installable ZIP
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ROOT=rar-woo-stock-order
+          rm -rf dist
+          mkdir -p "dist/$ROOT"
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='tests' \
+            --exclude='dist' \
+            ./ "dist/$ROOT/"
+          (cd dist && zip -qr "rar-woo-stock-order-v$VERSION.zip" "$ROOT")
+          unzip -t "dist/rar-woo-stock-order-v$VERSION.zip"
+          unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -q "rar-woo-stock-order/rar-woo-stock-order.php"
+          if unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -Eq "rar-woo-stock-order/(\.github|tests)/"; then
+            echo "Development-only files leaked into release ZIP."
+            exit 1
+          fi
+          (cd dist && sha256sum "rar-woo-stock-order-v$VERSION.zip" > SHA256SUMS.txt)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" \
+            "dist/rar-woo-stock-order-v$VERSION.zip" \
+            "dist/SHA256SUMS.txt" \
+            --title "RAR Woo Stock & Order v$VERSION" \
+            --notes-file RELEASE_NOTES.md \
+            --target "$GITHUB_SHA"
