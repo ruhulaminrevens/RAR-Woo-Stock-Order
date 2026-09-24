@@ -19,3 +19,39 @@ jobs:
 
       - name: JavaScript syntax
         run: node --check assets/js/staff.js
+
+      - name: Shell syntax
+        run: bash -n tests/runtime-smoke.sh
+
+  runtime:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli, curl, mbstring, intl
+          tools: wp-cli
+
+      - name: Run WordPress + WooCommerce runtime smoke tests
+        env:
+          WP_PATH: /tmp/rar-wso-wp
+          BASE_URL: http://127.0.0.1:8080
+        run: bash tests/runtime-smoke.sh
