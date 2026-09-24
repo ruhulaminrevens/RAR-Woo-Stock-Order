@@ -43,12 +43,19 @@ class RAR_WSO_PWA {
 
     private function service_worker(){
         nocache_headers();header('Content-Type: application/javascript; charset=utf-8');header('Service-Worker-Allowed: /');
-        $start=esc_url_raw(RAR_WSO_Plugin::staff_url());
-        echo "const CACHE='rar-wso-v".esc_js(RAR_WSO_VERSION)."';\n";
-        echo "const START=".wp_json_encode($start).";\n";
-        echo "self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.add(START)).catch(()=>{}));});\n";
-        echo "self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim());});\n";
-        echo "self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==location.origin)return;if(u.pathname.includes('/wp-admin/admin-ajax.php'))return;e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(CACHE).then(x=>x.put(e.request,c)).catch(()=>{});return r;}).catch(()=>caches.match(e.request).then(r=>r||caches.match(START))));});\n";
+        $staff_path=trailingslashit(wp_parse_url(RAR_WSO_Plugin::staff_url(),PHP_URL_PATH));
+        $assets=array(
+            RAR_WSO_URL.'assets/css/staff.css?ver='.rawurlencode(RAR_WSO_VERSION),
+            RAR_WSO_URL.'assets/js/staff.js?ver='.rawurlencode(RAR_WSO_VERSION),
+            home_url('/rar-wso-icon.svg'),
+            home_url('/rar-wso-manifest.webmanifest')
+        );
+        echo "const CACHE='rar-wso-assets-".esc_js(RAR_WSO_VERSION)."-r1';\n";
+        echo "const STAFF_PATH=".wp_json_encode($staff_path).";\n";
+        echo "const ASSETS=".wp_json_encode(array_values($assets),JSON_UNESCAPED_SLASHES).";\n";
+        echo "self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{}));});\n";
+        echo "self.addEventListener('activate',e=>{e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('rar-wso-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()]));});\n";
+        echo "self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==location.origin)return;if(u.pathname.startsWith(STAFF_PATH)||u.pathname.startsWith('/wp-admin/'))return;if(!ASSETS.includes(e.request.url))return;e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request).then(r=>{if(r&&r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy)).catch(()=>{});}return r;})));});\n";
         exit;
     }
 
@@ -57,15 +64,18 @@ class RAR_WSO_PWA {
         if(!is_user_logged_in())$this->login_screen();
         if(!RAR_WSO_Plugin::can('rar_wso_access')){status_header(403);$this->simple_page(__('Access denied','rar-woo-stock-order'),__('Your account does not have permission to use the staff app.','rar-woo-stock-order'));}
 
+        $districts=WC()->countries->get_states('BD');
         $user=wp_get_current_user();$config=array(
-            'ajaxUrl'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('rar_wso_nonce'),'currency'=>get_woocommerce_currency_symbol(),
+            'ajaxUrl'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('rar_wso_nonce'),
+            'currency'=>get_woocommerce_currency_symbol(),'currencyPosition'=>get_option('woocommerce_currency_pos','left'),
+            'decimals'=>wc_get_price_decimals(),'decimalSep'=>wc_get_price_decimal_separator(),'thousandSep'=>wc_get_price_thousand_separator(),
+            'districts'=>array_values($districts),
             'canStock'=>RAR_WSO_Plugin::can('rar_wso_manage_stock'),'canOrder'=>RAR_WSO_Plugin::can('rar_wso_create_orders'),
             'allowPrice'=>'yes'===$s['allow_price_override']&&RAR_WSO_Plugin::can('rar_wso_adjust_price'),
             'allowAdd'=>'yes'===$s['allow_product_add']||current_user_can('manage_woocommerce'),
             'allowDelete'=>'yes'===$s['allow_product_delete']||current_user_can('manage_woocommerce'),
             'shipping'=>(float)$s['default_shipping'],'staffUrl'=>RAR_WSO_Plugin::staff_url(),'swUrl'=>home_url('/rar-wso-sw.js')
         );
-        $districts=WC()->countries->get_states('BD');
         ?>
 <!doctype html><html <?php language_attributes(); ?>><head>
 <meta charset="<?php bloginfo('charset'); ?>"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -90,7 +100,7 @@ class RAR_WSO_PWA {
 <div class="rar-card rar-customer-grid">
 <label><span>Customer name *</span><input name="name" required></label><label><span>Phone *</span><input name="phone" inputmode="tel" required></label>
 <label><span>Email (optional)</span><input name="email" type="email"></label><label class="wide"><span>Address *</span><input name="address" required></label>
-<label><span>Town / City *</span><input name="city" required></label><label><span>District *</span><input name="district" list="rar-districts" required></label>
+<label><span>Town / City *</span><input name="city" required></label><label><span>District *</span><input name="district" list="rar-districts" autocomplete="off" required></label>
 <datalist id="rar-districts"><?php foreach($districts as $code=>$label):?><option value="<?php echo esc_attr($label); ?>"><?php endforeach;?></datalist>
 </div>
 <div class="rar-card"><label><span>Search product</span><input id="rar-order-search" type="search" placeholder="Type item name or SKU…" autocomplete="off"></label><div id="rar-order-search-results" class="rar-search-results"></div></div>
