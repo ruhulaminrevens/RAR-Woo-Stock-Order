@@ -33,8 +33,6 @@ class RAR_WSO_Admin {
         $out['dashboard_title']      = sanitize_text_field( isset( $input['dashboard_title'] ) ? $input['dashboard_title'] : 'Woo Stock & Order' );
         $out['default_order_status'] = sanitize_key( isset( $input['default_order_status'] ) ? $input['default_order_status'] : 'processing' );
         $out['allow_price_override'] = ! empty( $input['allow_price_override'] ) ? 'yes' : 'no';
-        $out['allow_product_add']    = ! empty( $input['allow_product_add'] ) ? 'yes' : 'no';
-        $out['allow_product_delete'] = ! empty( $input['allow_product_delete'] ) ? 'yes' : 'no';
         $out['default_shipping']     = wc_format_decimal( isset( $input['default_shipping'] ) ? $input['default_shipping'] : '0' );
 
         if ( empty( $out['staff_slug'] ) ) {
@@ -79,8 +77,6 @@ class RAR_WSO_Admin {
                     <tr><th><label for="rar-wso-slug"><?php esc_html_e( 'Staff URL slug', 'rar-woo-stock-order' ); ?></label></th><td><code><?php echo esc_html( home_url( '/' ) ); ?></code><input id="rar-wso-slug" type="text" name="rar_wso_settings[staff_slug]" value="<?php echo esc_attr( $s['staff_slug'] ); ?>" style="width:180px"><code>/</code></td></tr>
                     <tr><th><?php esc_html_e( 'Default new order status', 'rar-woo-stock-order' ); ?></th><td><select name="rar_wso_settings[default_order_status]"><?php foreach ( $statuses as $key => $label ) : $slug = str_replace( 'wc-', '', $key ); ?><option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $s['default_order_status'], $slug ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
                     <tr><th><?php esc_html_e( 'Order price override', 'rar-woo-stock-order' ); ?></th><td><label><input type="checkbox" name="rar_wso_settings[allow_price_override]" value="1" <?php checked( $s['allow_price_override'], 'yes' ); ?>> <?php esc_html_e( 'Allow staff to change item price while billing', 'rar-woo-stock-order' ); ?></label></td></tr>
-                    <tr><th><?php esc_html_e( 'Product creation', 'rar-woo-stock-order' ); ?></th><td><label><input type="checkbox" name="rar_wso_settings[allow_product_add]" value="1" <?php checked( $s['allow_product_add'], 'yes' ); ?>> <?php esc_html_e( 'Allow staff to add simple products', 'rar-woo-stock-order' ); ?></label></td></tr>
-                    <tr><th><?php esc_html_e( 'Product deletion', 'rar-woo-stock-order' ); ?></th><td><label><input type="checkbox" name="rar_wso_settings[allow_product_delete]" value="1" <?php checked( $s['allow_product_delete'], 'yes' ); ?>> <?php esc_html_e( 'Allow staff to move products to Trash', 'rar-woo-stock-order' ); ?></label></td></tr>
                     <tr><th><label for="rar-wso-shipping"><?php esc_html_e( 'Default shipping charge', 'rar-woo-stock-order' ); ?></label></th><td><input id="rar-wso-shipping" type="number" min="0" step="0.01" name="rar_wso_settings[default_shipping]" value="<?php echo esc_attr( $s['default_shipping'] ); ?>"></td></tr>
                 </table>
                 <?php submit_button(); ?>
@@ -88,8 +84,8 @@ class RAR_WSO_Admin {
 
             <hr>
             <h2><?php esc_html_e( 'Staff permissions', 'rar-woo-stock-order' ); ?></h2>
-            <p><?php esc_html_e( 'Assign the “Woo Stock & Order Staff” role from Users → All Users. Default staff can access the app, update stock, create orders and override order-line prices. Product add/delete remains disabled unless enabled above.', 'rar-woo-stock-order' ); ?></p>
-            <p><strong><?php esc_html_e( 'Safety:', 'rar-woo-stock-order' ); ?></strong> <?php esc_html_e( 'Product deletion only moves a product to Trash; it is never permanently deleted from the staff app.', 'rar-woo-stock-order' ); ?></p>
+            <p><?php esc_html_e( 'Assign the “Woo Stock & Order Staff” role from Users → All Users. Staff can use the private app, update stock and create WooCommerce orders. Item-price override remains optional.', 'rar-woo-stock-order' ); ?></p>
+            <p><strong><?php esc_html_e( 'Catalog management:', 'rar-woo-stock-order' ); ?></strong> <?php esc_html_e( 'Product creation, editing and deletion intentionally stay in WooCommerce → Products for Administrator / Shop Manager users. The staff app does not duplicate those controls.', 'rar-woo-stock-order' ); ?></p>
         </div>
         <?php
     }
