@@ -75,7 +75,7 @@ if ($path !== '/' && is_file($file)) {
 require __DIR__ . '/index.php';
 PHP
 
-php -S 127.0.0.1:8080 "${WP_PATH}/router.php" >"${SERVER_LOG}" 2>&1 &
+php -S 127.0.0.1:8080 -t "${WP_PATH}" "${WP_PATH}/router.php" >"${SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 trap 'kill "${SERVER_PID}" 2>/dev/null || true' EXIT
 
