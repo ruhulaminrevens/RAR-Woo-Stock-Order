@@ -1,0 +1,21 @@
+name: Validate plugin
+
+on:
+  push:
+    branches:
+      - main
+      - release/v1.1.0
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP syntax
+        run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: JavaScript syntax
+        run: node --check assets/js/staff.js
