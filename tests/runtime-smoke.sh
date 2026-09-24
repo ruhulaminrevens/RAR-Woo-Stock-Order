@@ -155,7 +155,7 @@ POST_ORDER_STOCK="$("${WP[@]}" eval "echo wc_get_product(${PRODUCT_ID})->get_sto
 [[ "${POST_ORDER_STOCK}" == "3" ]] || fail "Expected stock 3 after one real order and duplicate retry, got ${POST_ORDER_STOCK}"
 echo "PASS: duplicate retry did not reduce stock twice"
 
-ORDER_META="$("${WP[@]}" eval "$o=wc_get_order(${ORDER_ID}); echo wp_json_encode(array('created_via'=>$o->get_created_via(),'channel'=>$o->get_meta('_rar_wso_channel'),'request_id'=>$o->get_meta('_rar_wso_request_id')));")"
+ORDER_META="$("${WP[@]}" eval "\$o=wc_get_order(${ORDER_ID}); echo wp_json_encode(array('created_via'=>\$o->get_created_via(),'channel'=>\$o->get_meta('_rar_wso_channel'),'request_id'=>\$o->get_meta('_rar_wso_request_id')));")"
 assert_jq "${ORDER_META}" '.created_via=="rar-wso-staff" and .channel=="staff-pwa" and .request_id=="runtime-order-001"' "order metadata persisted"
 
 STATS_JSON="$(curl -sS -b "${COOKIE_JAR}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
