@@ -115,7 +115,7 @@ ajax() {
 
 echo "== Product search =="
 SEARCH_JSON="$(curl -sS -b "${COOKIE_JAR}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${NONCE}"   --data-urlencode 'search=RARTEST001'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${SEARCH_JSON}" --argjson pid "${PRODUCT_ID}" '.success==true and ([.data.items[].id] | index($pid)) != null' "SKU search finds exact product"
+assert_jq "${SEARCH_JSON}" ".success==true and ([.data.items[].id] | index(${PRODUCT_ID})) != null" "SKU search finds exact product"
 
 NO_MATCH_JSON="$(curl -sS -b "${COOKIE_JAR}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${NONCE}"   --data-urlencode 'search=NO-SUCH-RAR-PRODUCT-XYZ'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${NO_MATCH_JSON}" '.success==true and (.data.items|length)==0' "unrelated search returns no products"
@@ -149,7 +149,7 @@ assert_jq "${ORDER_ONE}" '.success==true and .data.duplicate==false and .data.st
 ORDER_ID="$(echo "${ORDER_ONE}" | jq -r '.data.order_id')"
 
 ORDER_TWO="$(curl -sS -b "${COOKIE_JAR}"   --data-urlencode 'action=rar_wso_create_order'   --data-urlencode "nonce=${NONCE}"   --data-urlencode "payload=${VALID_PAYLOAD}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${ORDER_TWO}" --argjson oid "${ORDER_ID}" '.success==true and .data.duplicate==true and .data.order_id==$oid' "duplicate retry returns original order"
+assert_jq "${ORDER_TWO}" ".success==true and .data.duplicate==true and .data.order_id==${ORDER_ID}" "duplicate retry returns original order"
 
 POST_ORDER_STOCK="$("${WP[@]}" eval "echo wc_get_product(${PRODUCT_ID})->get_stock_quantity();")"
 [[ "${POST_ORDER_STOCK}" == "3" ]] || fail "Expected stock 3 after one real order and duplicate retry, got ${POST_ORDER_STOCK}"
