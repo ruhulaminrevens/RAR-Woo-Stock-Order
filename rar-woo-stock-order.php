@@ -9,8 +9,12 @@
  * Text Domain: rar-woo-stock-order
  * Requires at least: 6.3
  * Requires PHP: 7.4
+ * Requires Plugins: woocommerce
  * WC requires at least: 8.0
  * WC tested up to: 11.1
+ * Update URI: https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
