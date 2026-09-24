@@ -2,76 +2,81 @@
 
 Mobile-first **WooCommerce Stock Manager + Staff Order Entry PWA** for teams that mainly work from phones.
 
-## Download
+## Purpose
 
-**[⬇️ Download stable v1.0.0 installable ZIP](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/archive/refs/heads/v1.0.0.zip)**
+The plugin has a deliberately narrow production scope:
 
-**[⬇️ Download latest main ZIP](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/archive/refs/heads/main.zip)**
+- staff can view/search products and update stock
+- staff can create WooCommerce orders quickly from phone/social/telephone sales
+- product creation, full product editing and deletion stay in **WooCommerce → Products** for Administrator / Shop Manager users
 
-Install: **WordPress → Plugins → Add New → Upload Plugin → choose ZIP → Install Now → Activate**.
-
-> The GitHub archive is directly installable because the plugin bootstrap file is at repository root.
+This avoids duplicating WooCommerce catalog management inside the staff app.
 
 ## Staff App
 
-Default URL after activation:
+Default URL:
 
 `https://your-store.com/staff/`
 
-Open it on Chrome and choose **Add to Home Screen** for an app-like phone experience.
+The app is private, capability-protected, marked `noindex,nofollow`, and can be installed from Chrome using **Add to Home Screen**.
 
 ## Dashboard
 
-- **Today's Orders**
-- **Today's Sales**
-- **Low Stock**
-- **Out of Stock**
-- **📦 Stock Manager**
-- **🧾 Create Order**
+- Today's Orders
+- Today's Sales
+- Low Stock
+- Out of Stock
+- Stock Manager
+- Create Order
 
 ## Stock Manager
 
-Phone-friendly item/SKU search with image, website price, stock status and stock quantity.
-
-Default **Woo Stock & Order Staff** permissions:
-
-- View/search products
-- Update stock quantity/status
-- Create WooCommerce orders
-- Override an order-line price while billing (admin can disable)
-- **Cannot add products by default**
-- **Cannot delete products by default**
-
-Admin can enable product creation/deletion from **WooCommerce → Stock & Order**. Delete is intentionally safe: it moves the product to WordPress Trash instead of permanently deleting it.
+- item/SKU search
+- product image
+- current and regular price
+- stock status and quantity
+- protected stock updates
+- unmanaged-stock products require an explicit quantity before stock management is enabled
+- WooCommerce log entry for stock changes (`source: rar-wso`)
 
 ## Create Order
 
-Designed for Facebook / Instagram / chat / phone orders.
-
-Customer information:
+Customer fields:
 
 `Customer name | Phone | Email (optional) | Address | Town/City | District`
 
-POS-style item workflow:
+Order workflow:
 
-`Item | Qty | Price | Line total`
+`Search item → Add → Qty → Price → Shipping → Note → Save Order`
 
-Website price is loaded by default. Staff can change the billing price only if admin allows it. A shipping charge and order note can also be added.
+Production protections include:
 
-Saving creates a real WooCommerce order, triggers normal WooCommerce status hooks/emails, and uses WooCommerce stock-reduction protection.
+- Bangladesh district validation
+- available-stock validation when backorders are not allowed
+- optional staff line-price override
+- duplicate-order retry protection using an idempotent request key
+- WooCommerce-native order CRUD and stock reduction
+- standard WooCommerce status/email hooks
+- extension hooks for shipping/payment integrations
 
-## Production & Safety Design
+Available integration hooks:
 
-- WordPress nonce on every write request
-- Capability check on every staff action
-- WooCommerce CRUD APIs instead of direct order-table writes
+- `rar_wso_shipping_total`
+- `rar_wso_payment_method`
+- `rar_wso_payment_method_title`
+- `rar_wso_order_created`
+- `rar_wso_stock_updated`
+
+## Security & PWA
+
+- WordPress nonce on every AJAX request
+- capability check on every staff action
+- no public inventory/order write endpoint
 - HPOS compatibility declared
-- WooCommerce log entry for staff stock changes (`source: rar-wso`)
-- Product deletion is Trash-only
-- No public inventory/order write API
-- Staff interface marked `noindex,nofollow`
-- PWA service worker does not cache WooCommerce/admin AJAX writes
-- Existing WooCommerce products and orders remain the source of truth
+- authenticated `/staff/` HTML and `wp-admin` requests are never cached by the service worker
+- service worker caches only the app's safe static assets and removes old RAR WSO caches
+- existing WooCommerce products/orders remain the source of truth
+- uninstall preserves operational WooCommerce data
 
 ## Settings
 
@@ -79,16 +84,16 @@ Go to **WooCommerce → Stock & Order**.
 
 Configure:
 
-- Enable/disable staff app
-- App title
-- Staff URL slug
-- Default new order status
-- Order price override
-- Staff product creation
-- Staff product deletion
-- Default shipping charge
+- enable/disable staff app
+- app title
+- staff URL slug
+- default new order status
+- item-price override
+- default shipping charge
 
-Assign staff users from **Users → All Users → Role → Woo Stock & Order Staff**.
+Assign staff users the role **Woo Stock & Order Staff** from **Users → All Users**.
+
+Administrator and Shop Manager continue to use the normal WooCommerce product screens for catalog add/edit/delete.
 
 ## Compatibility
 
@@ -96,10 +101,11 @@ Assign staff users from **Users → All Users → Role → Woo Stock & Order Sta
 - PHP 7.4+
 - WooCommerce 8.0+
 - WooCommerce HPOS supported
-- Designed to coexist with normal WooCommerce emails/status hooks and workflow plugins listening to standard status transitions
 
 ## Version
 
-Current stable: **v1.0.0**
+Release candidate: **v1.1.0**
+
+The current public stable branch remains v1.0.0 until v1.1.0 validation is completed and merged.
 
 See [CHANGELOG.md](CHANGELOG.md).
