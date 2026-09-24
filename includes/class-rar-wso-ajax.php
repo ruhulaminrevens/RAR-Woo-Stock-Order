@@ -30,7 +30,9 @@ class RAR_WSO_Ajax {
         $stock=$product->get_manage_stock() ? $product->get_stock_quantity() : null;
         return array(
             'id'=>$product->get_id(),'name'=>wp_strip_all_tags($name),'sku'=>$product->get_sku(),
-            'price'=>(float) wc_get_price_to_display($product),'price_html'=>wp_strip_all_tags($product->get_price_html()),
+            'price'=>(float) wc_get_price_to_display($product),
+            'regular_price'=>$product->get_regular_price()===''?null:(float)wc_get_price_to_display($product,array('price'=>(float)$product->get_regular_price())),
+            'sale_price'=>$product->get_sale_price()===''?null:(float)wc_get_price_to_display($product,array('price'=>(float)$product->get_sale_price())),
             'stock_qty'=>is_null($stock)?'':(float)$stock,'manage_stock'=>(bool)$product->get_manage_stock(),
             'stock_status'=>$product->get_stock_status(),'image'=>$image,'type'=>$product->get_type()
         );
@@ -50,14 +52,14 @@ class RAR_WSO_Ajax {
         $low=max(0,(int)get_option('woocommerce_notify_low_stock_amount',2));
         $low_stock=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(product_id) FROM {$lookup} WHERE stock_quantity IS NOT NULL AND stock_quantity > 0 AND stock_quantity <= %d AND stock_status='instock'",$low));
         $out_stock=(int)$wpdb->get_var("SELECT COUNT(product_id) FROM {$lookup} WHERE stock_status='outofstock'"); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-        wp_send_json_success(array('orders'=>$count,'sales'=>wc_price($sales),'low_stock'=>$low_stock,'out_stock'=>$out_stock));
+        wp_send_json_success(array('orders'=>$count,'sales'=>(float)$sales,'low_stock'=>$low_stock,'out_stock'=>$out_stock));
     }
 
     public function products() {
         $this->guard();
         $search=isset($_POST['search'])?sanitize_text_field(wp_unslash($_POST['search'])):'';
         $args=array('status'=>'publish','limit'=>30,'orderby'=>'name','order'=>'ASC','return'=>'objects');
-        if($search!=='') $args['search']=$search;
+        if($search!=='') $args['s']=$search;
         $products=wc_get_products($args);
 
         if($search!=='' && count($products)<30){
@@ -112,6 +114,8 @@ class RAR_WSO_Ajax {
         $items=isset($payload['items'])&&is_array($payload['items'])?$payload['items']:array();
         if($name===''||$phone===''||$address===''||$city===''||$district===''||empty($items))wp_send_json_error(array('message'=>__('Name, phone, address, town/city, district and at least one item are required.','rar-woo-stock-order')),422);
         if($email && !is_email($email))wp_send_json_error(array('message'=>__('Please enter a valid email address.','rar-woo-stock-order')),422);
+        $district_code=$this->district_to_state_code($district);
+        if($district_code==='')wp_send_json_error(array('message'=>__('Please select a valid Bangladesh district.','rar-woo-stock-order')),422);
 
         $settings=RAR_WSO_Plugin::settings();
         $can_override='yes'===$settings['allow_price_override'] && RAR_WSO_Plugin::can('rar_wso_adjust_price');
@@ -119,12 +123,16 @@ class RAR_WSO_Ajax {
             $order=wc_create_order(array('status'=>'pending'));
             if(is_wp_error($order))throw new Exception($order->get_error_message());
             $parts=preg_split('/\s+/',trim($name),2);$first=$parts[0]??$name;$last=$parts[1]??'';
-            $billing=array('first_name'=>$first,'last_name'=>$last,'phone'=>$phone,'email'=>$email,'address_1'=>$address,'city'=>$city,'state'=>$this->district_to_state_code($district),'country'=>'BD');
+            $billing=array('first_name'=>$first,'last_name'=>$last,'phone'=>$phone,'email'=>$email,'address_1'=>$address,'city'=>$city,'state'=>$district_code,'country'=>'BD');
             $order->set_address($billing,'billing');$order->set_address($billing,'shipping');
 
             foreach($items as $raw){
                 $pid=absint($raw['id']??0);$qty=max(1,absint($raw['qty']??1));$product=wc_get_product($pid);
                 if(!$product||!$product->is_purchasable())throw new Exception(sprintf(__('Product #%d is not available for ordering.','rar-woo-stock-order'),$pid));
+                $stock_qty=$product->get_stock_quantity();
+                if($product->get_manage_stock() && null!==$stock_qty && $qty>(float)$stock_qty && !$product->backorders_allowed()){
+                    throw new Exception(sprintf(__('Only %1$s unit(s) of %2$s are currently in stock.','rar-woo-stock-order'),wc_format_localized_decimal($stock_qty),wp_strip_all_tags($product->get_name())));
+                }
                 $base=(float)$product->get_price();$price=$base;
                 if($can_override && isset($raw['price']) && is_numeric($raw['price']))$price=max(0,(float)wc_format_decimal($raw['price']));
                 $item_id=$order->add_product($product,$qty,array('subtotal'=>$price*$qty,'total'=>$price*$qty));
@@ -176,6 +184,6 @@ class RAR_WSO_Ajax {
     private function district_to_state_code($district){
         $states=WC()->countries->get_states('BD');
         foreach($states as $code=>$label){if(0===strcasecmp(trim(wp_strip_all_tags($label)),trim($district))||0===strcasecmp($code,trim($district)))return $code;}
-        return sanitize_text_field($district);
+        return '';
     }
 }
