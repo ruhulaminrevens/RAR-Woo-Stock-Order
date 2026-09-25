@@ -154,12 +154,14 @@ login_user staff 'StaffPass123!' "${STAFF_COOKIE}" /tmp/rar-wso-staff-login.html
 curl -fsS -b "${STAFF_COOKIE}" "${BASE_URL}/staff/" -o "${STAFF_HTML}"
 
 grep -q 'Secure staff workspace · v1.2.1' "${STAFF_HTML}" || fail "Staff app missing v1.2.1 marker"
-grep -q "Today's Date" "${STAFF_HTML}" || fail "Professional dashboard date bar missing"
-grep -q 'Available / Live' "${STAFF_HTML}" || fail "Inventory dashboard cards missing"
+grep -q "TODAY'S DATE" "${STAFF_HTML}" || fail "v1.3 dashboard date header missing"
+grep -q 'Available / Live Stock' "${STAFF_HTML}" || fail "v1.3 inventory dashboard cards missing"
+grep -q 'data-dashboard-period="7days"' "${STAFF_HTML}" || fail "v1.3 dashboard period switch missing"
+grep -q 'Sales · last 7 days' "${STAFF_HTML}" || fail "v1.3 staff sales insight missing"
 grep -q 'Save & Share' "${STAFF_HTML}" || fail "Save & Share action missing"
 grep -q 'Town / City / Upazila' "${STAFF_HTML}" || fail "Town/City/Upazila picker missing"
-if grep -q 'Manager Control Center' "${STAFF_HTML}"; then
-  fail "Staff user unexpectedly sees manager-only controls"
+if grep -q 'Order Control' "${STAFF_HTML}" || grep -q 'Sales &amp; Growth' "${STAFF_HTML}"; then
+  fail "Staff user unexpectedly sees manager-only dashboard controls"
 fi
 if grep -q '&#2547;' "${STAFF_HTML}" || grep -q '&amp;nbsp;' "${STAFF_HTML}"; then
   fail "Raw currency HTML entity leaked into staff HTML"
@@ -173,7 +175,7 @@ STAFF_NONCE="$(extract_nonce "${STAFF_HTML}")"
 
 echo "== Dashboard stats and inventory bands =="
 STATS_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${STAFF_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${STATS_JSON}" '.success==true and .data.today_orders>=1 and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard metrics load with custom order statuses"
+assert_jq "${STATS_JSON}" '.success==true and .data.role=="staff" and .data.period.key=="today" and .data.period.current.orders>=1 and (.data.trend.sales|length)==7 and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "v1.3 staff dashboard API loads with custom order statuses"
 
 HIGH_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARHIGH001'   --data-urlencode 'filter=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true and (.data.items[0].image|length)>0" "healthy stock product classification and image payload"
@@ -223,11 +225,13 @@ assert_jq "${ORDER_DB}" '.phone=="+8801700000000" and .city=="Savar" and .discou
 echo "== Manager workspace =="
 login_user manager 'ManagerPass123!' "${MANAGER_COOKIE}" /tmp/rar-wso-manager-login.html
 curl -fsS -b "${MANAGER_COOKIE}" "${BASE_URL}/staff/" -o "${MANAGER_HTML}"
-grep -q 'Manager Control Center' "${MANAGER_HTML}" || fail "Shop Manager missing manager control center"
+grep -q 'Order Control' "${MANAGER_HTML}" || fail "Shop Manager missing v1.3 order control"
 grep -q 'All Orders' "${MANAGER_HTML}" || fail "All Orders action missing"
 grep -q 'Live Orders' "${MANAGER_HTML}" || fail "Live Orders action missing"
-grep -q '7-Day Sales' "${MANAGER_HTML}" || fail "Sales analytics chart missing"
-echo "PASS: Shop Manager receives extra professional controls"
+grep -q 'Total Processing' "${MANAGER_HTML}" || fail "Processing order-control card missing"
+grep -q 'Sales &amp; Growth' "${MANAGER_HTML}" || fail "Manager sales and growth area missing"
+grep -q 'data-manager-period="90days"' "${MANAGER_HTML}" || fail "Manager reporting period switch missing"
+echo "PASS: Shop Manager receives v1.3 role-aware dashboard controls"
 
 MANAGER_NONCE="$(extract_nonce "${MANAGER_HTML}")"
 [[ -n "${MANAGER_NONCE}" ]] || fail "Could not extract manager AJAX nonce"
@@ -237,6 +241,9 @@ assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${O
 
 TODAY_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=today'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${TODAY_ORDERS}" ".success==true and .data.mode==\"today\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Today's Orders drilldown includes today's order"
+
+PROCESSING_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=processing'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${PROCESSING_ORDERS}" ".success==true and .data.mode==\"processing\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Processing drilldown includes processing order"
 
 STATUS_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_update_order_status'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode "order_id=${ORDER_ID}"   --data-urlencode 'status=completed'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${STATUS_JSON}" '.success==true and .data.order.status=="completed"' "manager can update order status"
@@ -248,7 +255,7 @@ LIVE_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_
 assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null and ([.data.orders[].id]|index(${CUSTOM_ID}))!=null" "Live Orders excludes completed but keeps custom open status"
 
 MANAGER_STATS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${MANAGER_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${MANAGER_STATS}" '.success==true and .data.completed_orders>=1 and (.data.analytics.sales|length)==7 and (.data.analytics.week_total|type)=="number" and (.data.analytics.growth_pct|type)=="number"' "manager dashboard analytics payload"
+assert_jq "${MANAGER_STATS}" '.success==true and .data.role=="manager" and .data.completed_orders>=1 and .data.order_control.all>=1 and .data.manager_period.key=="30days" and (.data.analytics.sales|length)==7 and (.data.analytics.week_total|type)=="number" and (.data.analytics.growth_pct|type)=="number" and (.data.recent_orders|type)=="array" and (.data.needs_attention|type)=="array"' "v1.3 manager dashboard analytics payload"
 
 echo "== PWA endpoints and currency regression =="
 MANIFEST="$(curl -fsS "${BASE_URL}/rar-wso-manifest.webmanifest")"
@@ -268,4 +275,4 @@ grep -q "ctx.fillText('IMAGE'" <<<"${JS_BODY}" || fail "Sales Order Slip IMAGE c
 grep -q "image:product.image" <<<"${JS_BODY}" || fail "Order items do not preserve product image data"
 echo "PASS: BDT currency and slip-image regression guards"
 
-echo "All RAR Woo Stock & Order v1.2.1 runtime smoke tests passed."
+echo "All RAR Woo Stock & Order v1.3 dashboard checkpoint runtime smoke tests passed."
