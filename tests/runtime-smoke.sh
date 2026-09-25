@@ -202,8 +202,14 @@ MANAGER_NONCE="$(extract_nonce "${MANAGER_HTML}")"
 MANAGER_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager All Orders includes staff-created order"
 
+TODAY_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=today'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${TODAY_ORDERS}" ".success==true and .data.mode==\"today\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Today's Orders drilldown includes today's order"
+
 STATUS_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_update_order_status'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode "order_id=${ORDER_ID}"   --data-urlencode 'status=completed'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${STATUS_JSON}" '.success==true and .data.order.status=="completed"' "manager can update order status"
+
+COMPLETED_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=completed'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${COMPLETED_ORDERS}" ".success==true and .data.mode==\"completed\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Completed Orders drilldown includes completed order"
 
 LIVE_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=live'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null" "completed order disappears from Live Orders"
