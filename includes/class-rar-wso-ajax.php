@@ -806,12 +806,15 @@ class RAR_WSO_Ajax {
         $this->manager_guard();
 
         $mode = isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'all';
+        $page = isset( $_POST['page'] ) ? max( 1, absint( $_POST['page'] ) ) : 1;
         $args = array(
-            'limit'   => 60,
-            'return'  => 'objects',
-            'orderby' => 'date',
-            'order'   => 'DESC',
-            'status'  => array_keys( wc_get_order_statuses() ),
+            'limit'    => 30,
+            'page'     => $page,
+            'paginate' => true,
+            'return'   => 'objects',
+            'orderby'  => 'date',
+            'order'    => 'DESC',
+            'status'   => array_keys( wc_get_order_statuses() ),
         );
 
         if ( 'live' === $mode ) {
@@ -831,17 +834,23 @@ class RAR_WSO_Ajax {
             $args['status'] = array_values( array_intersect( array( 'returned', 'cancelled', 'refunded' ), $registered ) );
         }
 
-        $orders = wc_get_orders( $args );
+        $query = wc_get_orders( $args );
+        $orders = is_object( $query ) && isset( $query->orders ) ? $query->orders : array();
         $items  = array();
 
         foreach ( $orders as $order ) {
             $items[] = $this->manager_order_payload( $order );
         }
 
+        $max_pages = is_object( $query ) && isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 1;
+
         wp_send_json_success(
             array(
-                'orders' => $items,
-                'mode'   => in_array( $mode, array( 'live', 'today', 'completed', 'returns' ), true ) ? $mode : 'all',
+                'orders'   => $items,
+                'mode'     => in_array( $mode, array( 'live', 'today', 'completed', 'returns' ), true ) ? $mode : 'all',
+                'page'     => $page,
+                'has_more' => $page < $max_pages,
+                'total'    => is_object( $query ) && isset( $query->total ) ? (int) $query->total : count( $items ),
             )
         );
     }
