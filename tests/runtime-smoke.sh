@@ -123,7 +123,7 @@ curl -fsS -b "${STAFF_COOKIE}" "${BASE_URL}/staff/" -o "${STAFF_HTML}"
 grep -q 'Secure staff workspace · v1.2.0' "${STAFF_HTML}" || fail "Staff app missing v1.2.0 marker"
 grep -q "Today's Date" "${STAFF_HTML}" || fail "Professional dashboard date bar missing"
 grep -q 'Available / Live' "${STAFF_HTML}" || fail "Inventory dashboard cards missing"
-grep -q 'Save &amp; Share' "${STAFF_HTML}" || fail "Save & Share action missing"
+grep -q 'Save & Share' "${STAFF_HTML}" || fail "Save & Share action missing"
 grep -q 'Town / City / Upazila' "${STAFF_HTML}" || fail "Town/City/Upazila picker missing"
 if grep -q 'Manager Control Center' "${STAFF_HTML}"; then
   fail "Staff user unexpectedly sees manager-only controls"
