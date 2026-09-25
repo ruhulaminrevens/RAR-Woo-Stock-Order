@@ -5,11 +5,19 @@
 
 Professional mobile-first WooCommerce staff PWA for **inventory control, fast order entry, manager order actions, sales analytics and shareable sales-order slips**.
 
-## Current code version
+## Current release
 
 **v1.3.0**
 
-The canonical installable ZIP is built and validated by GitHub Actions from the repository source. GitHub Release publishing is kept separate from source validation.
+### ⬇️ Direct plugin download
+
+[**Download RAR Woo Stock & Order v1.3.0 — Installable ZIP**](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.3.0/rar-woo-stock-order-v1.3.0.zip)
+
+[View v1.3.0 Release](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/tag/v1.3.0)
+
+Upload the ZIP directly from **WordPress → Plugins → Add New → Upload Plugin**.
+
+The release ZIP is published only after PHP, JavaScript, shell, packaging, and WordPress + WooCommerce runtime validation pass.
 
 ## v1.3.0 feature set
 
