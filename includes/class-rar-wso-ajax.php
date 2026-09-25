@@ -196,7 +196,7 @@ class RAR_WSO_Ajax {
                 'limit'        => -1,
                 'return'       => 'objects',
                 'date_created' => '>=' . $date_from,
-                'status'       => array_keys( wc_get_order_statuses() ),
+                'status'       => $this->registered_order_status_slugs(),
             )
         );
 
