@@ -20,6 +20,8 @@ let managerPage=1;
 let managerHasMore=false;
 let lastSlipUrl='';
 let statsRetryTimer=null;
+let dashboardPeriod='today';
+let managerDashboardPeriod='30days';
 
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'
@@ -160,9 +162,10 @@ setInterval(updateClock,1000);
 function view(name){
     $$('.rar-view').forEach(v=>v.classList.remove('active'));
     $('#rar-'+name)?.classList.add('active');
+    document.body.classList.toggle('rar-dashboard-active',name==='dashboard');
 
     if(name==='stock')loadProducts('',false);
-    if(name==='dashboard')loadStats();
+    if(name==='dashboard')loadStats(false);
 
     window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -171,46 +174,203 @@ $$('[data-view]').forEach(button=>{
     button.addEventListener('click',()=>view(button.dataset.view));
 });
 
-function renderAnalytics(data){
-    if(!C.isManager||!data)return;
+function signedPercent(value){
+    const number=Number(value||0);
+    if(Math.abs(number)<0.05)return '0%';
+    return (number>0?'+':'')+number.toFixed(1)+'%';
+}
 
-    const week=$('#rar-week-sales');
-    const growth=$('#rar-growth');
+function comparisonText(value,label='vs previous period'){
+    const number=Number(value||0);
+    return signedPercent(number)+' '+label;
+}
+
+function setText(selector,value){
+    const el=$(selector);
+    if(el)el.textContent=value;
+}
+
+function setWidth(selector,value){
+    const el=$(selector);
+    if(el)el.style.width=Math.max(0,Math.min(100,Number(value||0)))+'%';
+}
+
+function renderStockComposition(data){
+    const all=Math.max(1,Number(data.all_stock||0));
+    setWidth('#rar-comp-high',Number(data.high_stock||0)/all*100);
+    setWidth('#rar-comp-low',Number(data.low_stock||0)/all*100);
+    setWidth('#rar-comp-out',Number(data.out_stock||0)/all*100);
+    setWidth('#rar-comp-unmanaged',Number(data.unmanaged_stock||0)/all*100);
+
+    setText('#dash-high',Number(data.high_stock||0));
+    setText('#dash-low',Number(data.low_stock||0));
+    setText('#dash-out',Number(data.out_stock||0));
+    setText('#dash-unmanaged',Number(data.unmanaged_stock||0));
+    setText('#dash-healthy',Number(data.high_stock||0));
+    setText('#dash-low-2',Number(data.low_stock||0));
+
+    const units=Number(data.units_in_hand||0);
+    const value=Number(data.stock_value||0);
+    setText('#dash-stock-units',formatNumber(units)+' units in hand · stock value '+money(value));
+}
+
+function renderTrendLine(trend){
     const chart=$('#rar-sales-chart');
+    if(!chart)return;
 
-    if(week)week.textContent=money(data.week_total||0);
+    const values=(trend?.sales||[]).map(Number);
+    const labels=trend?.labels||[];
 
-    if(growth){
-        const g=Number(data.growth_pct||0);
-        growth.textContent=(g>0?'+':'')+g.toFixed(1)+'% vs previous week';
-        growth.classList.toggle('negative',g<0);
-        growth.classList.toggle('positive',g>=0);
+    if(!values.length){
+        chart.innerHTML='<div class="rar-chart-message">No sales data available.</div>';
+        return;
     }
 
-    if(chart){
-        if(data.warning){
-            chart.innerHTML='<div class="rar-chart-message">'+esc(data.warning)+'</div>';
-            return;
-        }
+    const max=Math.max(1,...values);
+    const width=760;
+    const height=190;
+    const pad=18;
+    const usableW=width-pad*2;
+    const usableH=height-44;
+    const points=values.map((value,index)=>{
+        const x=pad+(values.length===1?usableW/2:(usableW*index/(values.length-1)));
+        const y=pad+usableH-(value/max*usableH);
+        return [x,y];
+    });
 
-        const values=(data.sales||[]).map(Number);
-        const hasSales=values.some(value=>value>0);
+    const polygon=[[points[0][0],height-28],...points,[points[points.length-1][0],height-28]]
+        .map(point=>point.join(',')).join(' ');
+    const polyline=points.map(point=>point.join(',')).join(' ');
 
-        if(!hasSales){
-            chart.innerHTML='<div class="rar-chart-message">No active sales in the last 7 days.</div>';
-            return;
-        }
+    chart.innerHTML=
+        '<svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+
+            '<defs><linearGradient id="rarTrendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2dd4bf" stop-opacity=".25"/><stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/></linearGradient></defs>'+
+            '<line x1="'+pad+'" y1="'+(height-28)+'" x2="'+(width-pad)+'" y2="'+(height-28)+'" class="rar-chart-axis"/>'+
+            '<polygon points="'+polygon+'" fill="url(#rarTrendFill)"/>'+
+            '<polyline points="'+polyline+'" class="rar-chart-line"/>'+
+            points.map((point,index)=>'<circle cx="'+point[0]+'" cy="'+point[1]+'" r="'+(index===points.length-1?5:3)+'" class="rar-chart-dot"/>').join('')+
+        '</svg>'+
+        '<div class="rar-chart-labels">'+labels.map((label,index)=>'<span class="'+(index===labels.length-1?'active':'')+'">'+esc(label)+'</span>').join('')+'</div>';
+}
 
-        const max=Math.max(1,...values);
-        chart.innerHTML=values.map((value,i)=>{
-            const height=Math.max(4,(value/max)*100);
-            return '<div class="rar-bar-col">'+
-                '<span class="rar-bar-value">'+esc(money(value))+'</span>'+
-                '<div class="rar-bar-track"><i style="height:'+height+'%"></i></div>'+
-                '<small>'+esc((data.labels||[])[i]||'')+'</small>'+
-            '</div>';
-        }).join('');
+function renderSevenDayBars(trend){
+    const box=$('#rar-seven-chart');
+    if(!box)return;
+
+    const sales=(trend?.sales||[]).map(Number);
+    const labels=trend?.labels||[];
+    const max=Math.max(1,...sales);
+    const total=sales.reduce((sum,value)=>sum+value,0);
+    setText('#rar-seven-total',money(total)+' total');
+
+    box.innerHTML=sales.map((value,index)=>{
+        const height=Math.max(6,value/max*100);
+        return '<div class="rar-mini-bar">'+
+            '<span class="value">'+esc(value?money(value):'')+'</span>'+
+            '<div><i style="height:'+height+'%"></i></div>'+
+            '<small class="'+(index===sales.length-1?'active':'')+'">'+esc(labels[index]||'')+'</small>'+
+        '</div>';
+    }).join('');
+}
+
+function renderAttention(items){
+    const box=$('#rar-attention-list');
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    setText('#rar-attention-count',list.length+' '+(list.length===1?'item':'items'));
+
+    box.innerHTML=list.length?list.map(item=>
+        '<button type="button" class="rar-attention-item attention-'+esc(item.type||'info')+'" '+
+            (item.filter?'data-attention-filter="'+esc(item.filter)+'" ':'')+
+            (item.mode?'data-attention-mode="'+esc(item.mode)+'" ':'')+'>'+
+            '<b>'+esc(item.count||0)+'</b><span><strong>'+esc(item.title||'Needs attention')+'</strong><small>'+esc(item.detail||'')+'</small></span><i>›</i>'+
+        '</button>'
+    ).join(''):'<div class="rar-dashboard-empty">Nothing urgent right now.</div>';
+}
+
+function renderRecentOrders(orders){
+    const box=$('#rar-recent-orders');
+    if(!box)return;
+
+    const list=Array.isArray(orders)?orders:[];
+    box.innerHTML=list.length?list.map(order=>
+        '<article class="rar-recent-order">'+
+            '<div class="rar-recent-main"><strong>#'+esc(order.number)+' &nbsp;'+esc(order.customer)+'</strong>'+
+            '<small>'+esc(order.created||'')+' · '+esc(order.items||0)+' item'+(Number(order.items||0)===1?'':'s')+(order.city?' · '+esc(order.city):'')+'</small></div>'+
+            '<div class="rar-recent-total"><strong>'+esc(money(order.total))+'</strong><small>'+esc(order.payment||'')+'</small></div>'+
+            '<span class="rar-status-pill status-'+esc(order.status||'')+'">● '+esc(order.status_label||order.status||'')+'</span>'+
+        '</article>'
+    ).join(''):'<div class="rar-dashboard-empty">No recent orders to show.</div>';
+}
+
+function renderManagerDashboard(data){
+    if(!C.isManager)return;
+
+    const control=data.order_control||{};
+    setText('#manager-all-orders',Number(control.all||0));
+    setText('#manager-live-orders',Number(control.live||0));
+    setText('#manager-processing-orders',Number(control.processing||0));
+
+    const manager=data.manager_period?.current||{};
+    const previous=data.manager_period?.previous||{};
+    const comparison=data.manager_period?.current?.comparison||{};
+
+    setText('#mgr-sales-label','Sales · '+(data.manager_period?.label||''));
+    setText('#mgr-sales',money(manager.sales||0));
+    setText('#mgr-orders',Number(manager.orders||0));
+    setText('#mgr-average',money(manager.average_order||0));
+    setText('#mgr-items',Number(manager.items_sold||0));
+    setText('#mgr-sales-change',comparisonText(comparison.sales_pct));
+    setText('#mgr-orders-change',comparisonText(comparison.orders_pct));
+
+    const analytics=data.analytics||{};
+    const weekTotal=Number(analytics.week_total||0);
+    setText('#rar-week-sales',money(weekTotal)+' in 7 days');
+
+    const growth=Number(analytics.growth_pct||0);
+    const growthEl=$('#rar-growth');
+    if(growthEl){
+        growthEl.textContent=comparisonText(growth,'vs previous 7 days');
+        growthEl.classList.toggle('negative',growth<0);
+        growthEl.classList.toggle('positive',growth>=0);
     }
+
+    renderTrendLine(data.trend||analytics);
+}
+
+function renderDashboard(data){
+    const period=data.period||{};
+    const current=period.current||{};
+    const comparison=current.comparison||{};
+
+    setText('#stat-orders-label',period.key==='today'?"Today's Orders":'Orders · '+(period.label||''));
+    setText('#stat-sales-label',period.key==='today'?"Today's Sales":'Sales · '+(period.label||''));
+    setText('#stat-orders',Number(current.orders||0));
+    setText('#stat-sales',money(current.sales||0));
+    setText('#stat-completed-period',Number(current.completed||0));
+    setText('#stat-returned-period',Number(current.returned_cancelled||0));
+
+    setText('#stat-orders-sub',comparisonText(comparison.orders_pct));
+    setText('#stat-sales-sub',comparisonText(comparison.sales_pct));
+    setText('#stat-completed-sub',(current.orders?Math.round(Number(current.completed||0)/Number(current.orders)*100):0)+'% of period orders');
+    setText('#stat-returned-sub',Number(current.returned_cancelled||0)+' exception'+(Number(current.returned_cancelled||0)===1?'':'s'));
+
+    setText('#stat-all-stock',Number(data.all_stock||0));
+    setText('#stat-available',Number(data.available_stock||0));
+    setText('#stat-out',Number(data.out_stock||0));
+
+    setText('#stock-count-all',Number(data.all_stock||0));
+    setText('#stock-count-high',Number(data.high_stock||0));
+    setText('#stock-count-low',Number(data.low_stock||0));
+    setText('#stock-count-out',Number(data.out_stock||0));
+    setText('#stock-count-unmanaged',Number(data.unmanaged_stock||0));
+
+    renderStockComposition(data);
+    renderSevenDayBars(data.trend||{});
+    renderAttention(data.needs_attention||[]);
+    renderRecentOrders(data.recent_orders||[]);
+    renderManagerDashboard(data);
 }
 
 function scheduleStatsRetry(){
@@ -222,33 +382,50 @@ function scheduleStatsRetry(){
 
 async function loadStats(showError=true){
     try{
-        const data=await api('stats');
+        const data=await api('stats',{
+            period:dashboardPeriod,
+            manager_period:managerDashboardPeriod
+        });
+
         clearTimeout(statsRetryTimer);
-
-        $('#stat-orders').textContent=Number(data.today_orders||0);
-        $('#stat-sales').textContent=money(data.today_sales||0);
-        $('#stat-completed').textContent=Number(data.completed_orders||0);
-        $('#stat-returned').textContent=Number(data.returned_cancelled||0);
-        $('#stat-all-stock').textContent=Number(data.all_stock||0);
-        $('#stat-available').textContent=Number(data.available_stock||0);
-        $('#stat-out').textContent=Number(data.out_stock||0);
-
-        $('#stock-count-all').textContent=Number(data.all_stock||0);
-        $('#stock-count-high').textContent=Number(data.high_stock||0);
-        $('#stock-count-low').textContent=Number(data.low_stock||0);
-        $('#stock-count-out').textContent=Number(data.out_stock||0);
-        $('#stock-count-unmanaged').textContent=Number(data.unmanaged_stock||0);
-
-        renderAnalytics(data.analytics);
-
-        if(data.stats_warning&&showError){
-            toast(data.stats_warning);
-        }
+        renderDashboard(data);
     }catch(error){
         if(showError)toast('Dashboard data could not load. Retrying…');
         scheduleStatsRetry();
     }
 }
+
+$$('[data-dashboard-period]').forEach(button=>{
+    button.addEventListener('click',()=>{
+        dashboardPeriod=button.dataset.dashboardPeriod||'today';
+        $$('[data-dashboard-period]').forEach(item=>item.classList.toggle('active',item===button));
+        loadStats();
+    });
+});
+
+$$('[data-manager-period]').forEach(button=>{
+    button.addEventListener('click',()=>{
+        managerDashboardPeriod=button.dataset.managerPeriod||'30days';
+        $$('[data-manager-period]').forEach(item=>item.classList.toggle('active',item===button));
+        loadStats();
+    });
+});
+
+$('#rar-attention-list')?.addEventListener('click',event=>{
+    const button=event.target.closest('.rar-attention-item');
+    if(!button)return;
+
+    if(button.dataset.attentionFilter){
+        setStockFilter(button.dataset.attentionFilter);
+        view('stock');
+        return;
+    }
+
+    if(C.isManager&&button.dataset.attentionMode){
+        view('orders');
+        loadManagerOrders(button.dataset.attentionMode,false);
+    }
+});
 
 function stockBandLabel(product){
     if(product.stock_band==='high')return 'Healthy';
@@ -1091,7 +1268,7 @@ function renderManagerOrders(){
 async function loadManagerOrders(mode=managerMode,append=false){
     if(!C.isManager)return;
 
-    const allowed=['all','live','today','completed','returns'];
+    const allowed=['all','live','today','processing','completed','returns'];
     const nextMode=allowed.includes(mode)?mode:'all';
 
     if(!append||nextMode!==managerMode){
@@ -1107,6 +1284,7 @@ async function loadManagerOrders(mode=managerMode,append=false){
         all:'All Orders',
         live:'Live Orders',
         today:"Today's Orders",
+        processing:'Processing Orders',
         completed:'Completed Orders',
         returns:'Returned / Cancelled Orders'
     };
