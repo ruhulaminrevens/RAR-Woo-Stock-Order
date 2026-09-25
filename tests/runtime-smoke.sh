@@ -173,10 +173,10 @@ STAFF_NONCE="$(extract_nonce "${STAFF_HTML}")"
 
 echo "== Dashboard stats and inventory bands =="
 STATS_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${STAFF_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${STATS_JSON}" '.success==true and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard inventory metrics"
+assert_jq "${STATS_JSON}" '.success==true and .data.today_orders>=1 and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard metrics load with custom order statuses"
 
 HIGH_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARHIGH001'   --data-urlencode 'filter=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true" "healthy stock product classification"
+assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true and (.data.items[0].image|length)>0" "healthy stock product classification and image payload"
 
 LOW_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARLOW001'   --data-urlencode 'filter=low'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${LOW_JSON}" ".success==true and .data.items[0].id==${LOW_ID} and .data.items[0].stock_band==\"low\"" "low stock product classification"
@@ -233,7 +233,7 @@ MANAGER_NONCE="$(extract_nonce "${MANAGER_HTML}")"
 [[ -n "${MANAGER_NONCE}" ]] || fail "Could not extract manager AJAX nonce"
 
 MANAGER_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager All Orders includes staff-created order"
+assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))!=null and ([.data.orders[].id]|index(${CUSTOM_ID}))!=null" "manager All Orders loads standard and custom-status orders"
 
 TODAY_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=today'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${TODAY_ORDERS}" ".success==true and .data.mode==\"today\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Today's Orders drilldown includes today's order"
@@ -245,7 +245,7 @@ COMPLETED_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=r
 assert_jq "${COMPLETED_ORDERS}" ".success==true and .data.mode==\"completed\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Completed Orders drilldown includes completed order"
 
 LIVE_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=live'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null" "completed order disappears from Live Orders"
+assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null and ([.data.orders[].id]|index(${CUSTOM_ID}))!=null" "Live Orders excludes completed but keeps custom open status"
 
 MANAGER_STATS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${MANAGER_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${MANAGER_STATS}" '.success==true and .data.completed_orders>=1 and (.data.analytics.sales|length)==7 and (.data.analytics.week_total|type)=="number" and (.data.analytics.growth_pct|type)=="number"' "manager dashboard analytics payload"
