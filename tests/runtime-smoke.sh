@@ -264,6 +264,8 @@ JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/
 if grep -q '&#2547;' <<<"${JS_BODY}" || grep -q '&nbsp;' <<<"${JS_BODY}"; then
   fail "Raw BDT HTML entities exist in shipped staff JavaScript"
 fi
-echo "PASS: BDT currency regression guard"
+grep -q "ctx.fillText('IMAGE'" <<<"${JS_BODY}" || fail "Sales Order Slip IMAGE column is missing"
+grep -q "image:product.image" <<<"${JS_BODY}" || fail "Order items do not preserve product image data"
+echo "PASS: BDT currency and slip-image regression guards"
 
 echo "All RAR Woo Stock & Order v1.2.1 runtime smoke tests passed."
