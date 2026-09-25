@@ -14,6 +14,7 @@ final class RAR_WSO_Plugin {
     }
 
     private function __construct() {
+        require_once RAR_WSO_PATH . 'includes/class-rar-wso-data.php';
         require_once RAR_WSO_PATH . 'includes/class-rar-wso-admin.php';
         require_once RAR_WSO_PATH . 'includes/class-rar-wso-ajax.php';
         require_once RAR_WSO_PATH . 'includes/class-rar-wso-pwa.php';
