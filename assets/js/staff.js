@@ -14,12 +14,17 @@ let pendingOrderRequestId='';
 let stockFilter='all';
 let stockPage=1;
 let stockHasMore=false;
+let stockProducts=new Map();
+let activeStockProductId=0;
 let managerMode='all';
 let managerOrders=[];
 let managerPage=1;
 let managerHasMore=false;
+let managerUndo=new Map();
 let lastSlipUrl='';
 let statsRetryTimer=null;
+let dashboardPeriod='today';
+let managerDashboardPeriod='30days';
 
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'
@@ -155,14 +160,16 @@ function updateClock(){
 }
 
 updateClock();
+document.body.classList.add('rar-dashboard-active');
 setInterval(updateClock,1000);
 
 function view(name){
     $$('.rar-view').forEach(v=>v.classList.remove('active'));
     $('#rar-'+name)?.classList.add('active');
+    document.body.classList.toggle('rar-dashboard-active',name==='dashboard');
 
     if(name==='stock')loadProducts('',false);
-    if(name==='dashboard')loadStats();
+    if(name==='dashboard')loadStats(false);
 
     window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -171,46 +178,239 @@ $$('[data-view]').forEach(button=>{
     button.addEventListener('click',()=>view(button.dataset.view));
 });
 
-function renderAnalytics(data){
-    if(!C.isManager||!data)return;
+function signedPercent(value){
+    const number=Number(value||0);
+    if(Math.abs(number)<0.05)return '0%';
+    return (number>0?'+':'')+number.toFixed(1)+'%';
+}
 
-    const week=$('#rar-week-sales');
-    const growth=$('#rar-growth');
+function comparisonText(value,label='vs previous period'){
+    const number=Number(value||0);
+    return signedPercent(number)+' '+label;
+}
+
+function setText(selector,value){
+    const el=$(selector);
+    if(el)el.textContent=value;
+}
+
+function setWidth(selector,value){
+    const el=$(selector);
+    if(el)el.style.width=Math.max(0,Math.min(100,Number(value||0)))+'%';
+}
+
+function renderStockComposition(data){
+    const all=Math.max(1,Number(data.all_stock||0));
+    setWidth('#rar-comp-high',Number(data.high_stock||0)/all*100);
+    setWidth('#rar-comp-low',Number(data.low_stock||0)/all*100);
+    setWidth('#rar-comp-out',Number(data.out_stock||0)/all*100);
+    setWidth('#rar-comp-unmanaged',Number(data.unmanaged_stock||0)/all*100);
+
+    setText('#dash-high',Number(data.high_stock||0));
+    setText('#dash-low',Number(data.low_stock||0));
+    setText('#dash-out',Number(data.out_stock||0));
+    setText('#dash-unmanaged',Number(data.unmanaged_stock||0));
+    setText('#dash-healthy',Number(data.high_stock||0));
+    setText('#dash-low-2',Number(data.low_stock||0));
+
+    const units=Number(data.units_in_hand||0);
+    const value=Number(data.stock_value||0);
+    setText('#dash-stock-units',formatNumber(units)+' units in hand · stock value '+money(value));
+}
+
+function renderTrendLine(trend){
     const chart=$('#rar-sales-chart');
+    if(!chart)return;
 
-    if(week)week.textContent=money(data.week_total||0);
+    const values=(trend?.sales||[]).map(Number);
+    const labels=trend?.labels||[];
 
-    if(growth){
-        const g=Number(data.growth_pct||0);
-        growth.textContent=(g>0?'+':'')+g.toFixed(1)+'% vs previous week';
-        growth.classList.toggle('negative',g<0);
-        growth.classList.toggle('positive',g>=0);
+    if(!values.length){
+        chart.innerHTML='<div class="rar-chart-message">No sales data available.</div>';
+        return;
     }
 
-    if(chart){
-        if(data.warning){
-            chart.innerHTML='<div class="rar-chart-message">'+esc(data.warning)+'</div>';
-            return;
-        }
+    const max=Math.max(1,...values);
+    const width=760;
+    const height=190;
+    const pad=18;
+    const usableW=width-pad*2;
+    const usableH=height-44;
+    const points=values.map((value,index)=>{
+        const x=pad+(values.length===1?usableW/2:(usableW*index/(values.length-1)));
+        const y=pad+usableH-(value/max*usableH);
+        return [x,y];
+    });
 
-        const values=(data.sales||[]).map(Number);
-        const hasSales=values.some(value=>value>0);
+    const polygon=[[points[0][0],height-28],...points,[points[points.length-1][0],height-28]]
+        .map(point=>point.join(',')).join(' ');
+    const polyline=points.map(point=>point.join(',')).join(' ');
 
-        if(!hasSales){
-            chart.innerHTML='<div class="rar-chart-message">No active sales in the last 7 days.</div>';
-            return;
-        }
+    chart.innerHTML=
+        '<svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true">'+
+            '<defs><linearGradient id="rarTrendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2dd4bf" stop-opacity=".25"/><stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/></linearGradient></defs>'+
+            '<line x1="'+pad+'" y1="'+(height-28)+'" x2="'+(width-pad)+'" y2="'+(height-28)+'" class="rar-chart-axis"/>'+
+            '<polygon points="'+polygon+'" fill="url(#rarTrendFill)"/>'+
+            '<polyline points="'+polyline+'" class="rar-chart-line"/>'+
+            points.map((point,index)=>'<circle cx="'+point[0]+'" cy="'+point[1]+'" r="'+(index===points.length-1?5:3)+'" class="rar-chart-dot"/>').join('')+
+        '</svg>'+
+        '<div class="rar-chart-labels">'+labels.map((label,index)=>'<span class="'+(index===labels.length-1?'active':'')+'">'+esc(label)+'</span>').join('')+'</div>';
+}
 
-        const max=Math.max(1,...values);
-        chart.innerHTML=values.map((value,i)=>{
-            const height=Math.max(4,(value/max)*100);
-            return '<div class="rar-bar-col">'+
-                '<span class="rar-bar-value">'+esc(money(value))+'</span>'+
-                '<div class="rar-bar-track"><i style="height:'+height+'%"></i></div>'+
-                '<small>'+esc((data.labels||[])[i]||'')+'</small>'+
-            '</div>';
-        }).join('');
+function renderSevenDayBars(trend){
+    const box=$('#rar-seven-chart');
+    if(!box)return;
+
+    const sales=(trend?.sales||[]).map(Number);
+    const labels=trend?.labels||[];
+    const max=Math.max(1,...sales);
+    const total=sales.reduce((sum,value)=>sum+value,0);
+    setText('#rar-seven-total',money(total)+' total');
+
+    box.innerHTML=sales.map((value,index)=>{
+        const height=Math.max(6,value/max*100);
+        return '<div class="rar-mini-bar">'+
+            '<span class="value">'+esc(value?money(value):'')+'</span>'+
+            '<div><i style="height:'+height+'%"></i></div>'+
+            '<small class="'+(index===sales.length-1?'active':'')+'">'+esc(labels[index]||'')+'</small>'+
+        '</div>';
+    }).join('');
+}
+
+function renderAttention(items){
+    const box=$('#rar-attention-list');
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    setText('#rar-attention-count',list.length+' '+(list.length===1?'item':'items'));
+
+    box.innerHTML=list.length?list.map(item=>
+        '<button type="button" class="rar-attention-item attention-'+esc(item.type||'info')+'" '+
+            (item.filter?'data-attention-filter="'+esc(item.filter)+'" ':'')+
+            (item.mode?'data-attention-mode="'+esc(item.mode)+'" ':'')+'>'+
+            '<b>'+esc(item.count||0)+'</b><span><strong>'+esc(item.title||'Needs attention')+'</strong><small>'+esc(item.detail||'')+'</small></span><i>›</i>'+
+        '</button>'
+    ).join(''):'<div class="rar-dashboard-empty">Nothing urgent right now.</div>';
+}
+
+function renderRecentOrders(orders){
+    const box=$('#rar-recent-orders');
+    if(!box)return;
+
+    const list=Array.isArray(orders)?orders:[];
+    box.innerHTML=list.length?list.map(order=>
+        '<article class="rar-recent-order">'+
+            '<div class="rar-recent-main"><strong>#'+esc(order.number)+' · '+esc(order.customer)+'</strong>'+
+            '<small>'+esc(order.created||'')+' · '+esc(order.items||0)+' item'+(Number(order.items||0)===1?'':'s')+(order.city?' · '+esc(order.city):'')+'</small></div>'+
+            '<div class="rar-recent-total"><strong>'+esc(money(order.total))+'</strong><small>'+esc(order.payment||'')+'</small></div>'+
+            '<span class="rar-status-pill status-'+esc(order.status||'')+'">● '+esc(order.status_label||order.status||'')+'</span>'+
+        '</article>'
+    ).join(''):'<div class="rar-dashboard-empty">No recent orders to show.</div>';
+}
+
+function renderTopProducts(items,label){
+    const box=$('#rar-top-products');
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    setText('#rar-top-products-meta',label?'By quantity · '+label:'By quantity sold');
+
+    box.innerHTML=list.length?list.map((item,index)=>
+        '<div class="rar-breakdown-row">'+
+            '<b>'+(index+1)+'</b>'+
+            '<span><strong>'+esc(item.name||'Product')+'</strong><small>'+esc(formatNumber(item.qty||0))+' sold</small></span>'+
+            '<em>'+esc(money(item.sales||0))+'</em>'+
+        '</div>'
+    ).join(''):'<div class="rar-dashboard-empty">No product sales in this period.</div>';
+}
+
+function renderMix(selector,items){
+    const box=$(selector);
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    box.innerHTML=list.length?list.map(item=>{
+        const pct=Math.max(0,Math.min(100,Number(item.share_pct||0)));
+        return '<div class="rar-mix-row">'+
+            '<div><strong>'+esc(item.label||'Other')+'</strong><span>'+esc(item.orders||0)+' order'+(Number(item.orders||0)===1?'':'s')+'</span><em>'+esc(money(item.sales||0))+'</em></div>'+
+            '<div class="rar-mix-track"><i style="width:'+pct+'%"></i></div>'+
+            '<small>'+pct.toFixed(1)+'%</small>'+
+        '</div>';
+    }).join(''):'<div class="rar-dashboard-empty">No data in this period.</div>';
+}
+
+function renderManagerDashboard(data){
+    if(!C.isManager)return;
+
+    const control=data.order_control||{};
+    setText('#manager-all-orders',Number(control.all||0));
+    setText('#manager-live-orders',Number(control.live||0));
+    setText('#manager-processing-orders',Number(control.processing||0));
+
+    const manager=data.manager_period?.current||{};
+    const previous=data.manager_period?.previous||{};
+    const comparison=data.manager_period?.current?.comparison||{};
+
+    setText('#mgr-sales-label','Sales · '+(data.manager_period?.label||''));
+    setText('#mgr-sales',money(manager.sales||0));
+    setText('#mgr-orders',Number(manager.orders||0));
+    setText('#mgr-average',money(manager.average_order||0));
+    setText('#mgr-items',Number(manager.items_sold||0));
+    setText('#mgr-sales-change',comparisonText(comparison.sales_pct));
+    setText('#mgr-orders-change',comparisonText(comparison.orders_pct));
+
+    const analytics=data.analytics||{};
+    const weekTotal=Number(analytics.week_total||0);
+    setText('#rar-week-sales',money(weekTotal)+' in 7 days');
+
+    const growth=Number(analytics.growth_pct||0);
+    const growthEl=$('#rar-growth');
+    if(growthEl){
+        growthEl.textContent=comparisonText(growth,'vs previous 7 days');
+        growthEl.classList.toggle('negative',growth<0);
+        growthEl.classList.toggle('positive',growth>=0);
     }
+
+    renderTrendLine(data.trend||analytics);
+
+    const breakdowns=data.manager_breakdowns||{};
+    renderTopProducts(breakdowns.top_products||[],data.manager_period?.label||'');
+    renderMix('#rar-payment-mix',breakdowns.payment_mix||[]);
+    renderMix('#rar-channel-mix',breakdowns.channel_mix||[]);
+}
+
+function renderDashboard(data){
+    const period=data.period||{};
+    const current=period.current||{};
+    const comparison=current.comparison||{};
+
+    setText('#stat-orders-label',period.key==='today'?"Today's Orders":'Orders · '+(period.label||''));
+    setText('#stat-sales-label',period.key==='today'?"Today's Sales":'Sales · '+(period.label||''));
+    setText('#stat-orders',Number(current.orders||0));
+    setText('#stat-sales',money(current.sales||0));
+    setText('#stat-completed-period',Number(current.completed||0));
+    setText('#stat-returned-period',Number(current.returned_cancelled||0));
+
+    setText('#stat-orders-sub',comparisonText(comparison.orders_pct));
+    setText('#stat-sales-sub',comparisonText(comparison.sales_pct));
+    setText('#stat-completed-sub',(current.orders?Math.round(Number(current.completed||0)/Number(current.orders)*100):0)+'% of period orders');
+    setText('#stat-returned-sub',Number(current.returned_cancelled||0)+' exception'+(Number(current.returned_cancelled||0)===1?'':'s'));
+
+    setText('#stat-all-stock',Number(data.all_stock||0));
+    setText('#stat-available',Number(data.available_stock||0));
+    setText('#stat-out',Number(data.out_stock||0));
+
+    setText('#stock-count-all',Number(data.all_stock||0));
+    setText('#stock-count-high',Number(data.high_stock||0));
+    setText('#stock-count-low',Number(data.low_stock||0));
+    setText('#stock-count-out',Number(data.out_stock||0));
+    setText('#stock-count-unmanaged',Number(data.unmanaged_stock||0));
+
+    renderStockComposition(data);
+    renderSevenDayBars(data.trend||{});
+    renderAttention(data.needs_attention||[]);
+    renderRecentOrders(data.recent_orders||[]);
+    renderManagerDashboard(data);
 }
 
 function scheduleStatsRetry(){
@@ -222,33 +422,50 @@ function scheduleStatsRetry(){
 
 async function loadStats(showError=true){
     try{
-        const data=await api('stats');
+        const data=await api('stats',{
+            period:dashboardPeriod,
+            manager_period:managerDashboardPeriod
+        });
+
         clearTimeout(statsRetryTimer);
-
-        $('#stat-orders').textContent=Number(data.today_orders||0);
-        $('#stat-sales').textContent=money(data.today_sales||0);
-        $('#stat-completed').textContent=Number(data.completed_orders||0);
-        $('#stat-returned').textContent=Number(data.returned_cancelled||0);
-        $('#stat-all-stock').textContent=Number(data.all_stock||0);
-        $('#stat-available').textContent=Number(data.available_stock||0);
-        $('#stat-out').textContent=Number(data.out_stock||0);
-
-        $('#stock-count-all').textContent=Number(data.all_stock||0);
-        $('#stock-count-high').textContent=Number(data.high_stock||0);
-        $('#stock-count-low').textContent=Number(data.low_stock||0);
-        $('#stock-count-out').textContent=Number(data.out_stock||0);
-        $('#stock-count-unmanaged').textContent=Number(data.unmanaged_stock||0);
-
-        renderAnalytics(data.analytics);
-
-        if(data.stats_warning&&showError){
-            toast(data.stats_warning);
-        }
+        renderDashboard(data);
     }catch(error){
         if(showError)toast('Dashboard data could not load. Retrying…');
         scheduleStatsRetry();
     }
 }
+
+$$('[data-dashboard-period]').forEach(button=>{
+    button.addEventListener('click',()=>{
+        dashboardPeriod=button.dataset.dashboardPeriod||'today';
+        $$('[data-dashboard-period]').forEach(item=>item.classList.toggle('active',item===button));
+        loadStats();
+    });
+});
+
+$$('[data-manager-period]').forEach(button=>{
+    button.addEventListener('click',()=>{
+        managerDashboardPeriod=button.dataset.managerPeriod||'30days';
+        $$('[data-manager-period]').forEach(item=>item.classList.toggle('active',item===button));
+        loadStats();
+    });
+});
+
+$('#rar-attention-list')?.addEventListener('click',event=>{
+    const button=event.target.closest('.rar-attention-item');
+    if(!button)return;
+
+    if(button.dataset.attentionFilter){
+        setStockFilter(button.dataset.attentionFilter);
+        view('stock');
+        return;
+    }
+
+    if(C.isManager&&button.dataset.attentionMode){
+        view('orders');
+        loadManagerOrders(button.dataset.attentionMode,false);
+    }
+});
 
 function stockBandLabel(product){
     if(product.stock_band==='high')return 'Healthy';
@@ -288,7 +505,8 @@ function productRow(product){
         '</div>'+
         '<div class="rar-stock-control">'+
             '<input class="stock-qty" type="number" min="0" step="1" inputmode="numeric" placeholder="—" value="'+qtyValue+'">'+
-            '<button data-save="'+product.id+'" type="button">'+buttonText+'</button>'+
+            '<div class="rar-stock-row-actions"><button data-save="'+product.id+'" type="button">'+buttonText+'</button>'+
+            '<button class="rar-stock-open" data-open-stock="'+product.id+'" type="button">Quick</button></div>'+
         '</div>'+
     '</div>';
 }
@@ -312,6 +530,7 @@ async function loadProducts(query='',append=false){
         const data=await api('products',{search:query,filter:stockFilter,page:stockPage});
         if(requestId!==stockRequest)return;
 
+        (data.items||[]).forEach(product=>stockProducts.set(Number(product.id),product));
         const html=(data.items||[]).map(productRow).join('');
         if(append){
             list.insertAdjacentHTML('beforeend',html);
@@ -351,7 +570,158 @@ $('#rar-stock-more')?.addEventListener('click',()=>{
     loadProducts($('#rar-stock-search')?.value.trim()||'',true);
 });
 
+function stockMovementLabel(source){
+    if(source==='quick_adjust')return 'Quick adjust';
+    if(source==='manual_set')return 'Set quantity';
+    return 'Stock change';
+}
+
+function renderStockHistory(history){
+    const box=$('#rar-stock-history');
+    if(!box)return;
+
+    const list=Array.isArray(history)?history:[];
+    box.innerHTML=list.length?list.map(entry=>{
+        const delta=Number(entry.delta||0);
+        const from=entry.from===null?'Not tracked':formatNumber(entry.from);
+        const to=formatNumber(entry.to||0);
+        return '<article class="rar-movement-row">'+
+            '<div><strong>'+esc(stockMovementLabel(entry.source))+'</strong><small>'+esc(entry.time||'')+' · '+esc(entry.user||'')+'</small></div>'+
+            '<div class="rar-movement-values"><span>'+esc(from)+' → '+esc(to)+'</span><b class="'+(delta>0?'up':delta<0?'down':'')+'">'+(delta>0?'+':'')+esc(formatNumber(delta))+'</b></div>'+
+        '</article>';
+    }).join(''):'<div class="rar-dashboard-empty">No manual stock movements recorded yet.</div>';
+}
+
+function syncStockModalProduct(product){
+    if(!product)return;
+    activeStockProductId=Number(product.id||0);
+    stockProducts.set(activeStockProductId,product);
+
+    const image=$('#rar-stock-modal-image');
+    if(image)image.src=product.image||'';
+    setText('#rar-stock-modal-name',product.name||'Product');
+    setText('#rar-stock-modal-sku',product.sku?'SKU '+product.sku:'No SKU');
+
+    const band=$('#rar-stock-modal-band');
+    if(band){
+        band.className='rar-stock-badge band-'+String(product.stock_band||'unmanaged');
+        band.textContent=stockBandLabel(product);
+    }
+
+    const current=product.manage_stock?Number(product.stock_qty||0):0;
+    setText('#rar-stock-modal-current',product.manage_stock?formatNumber(current):'Not tracked');
+    const input=$('#rar-stock-modal-qty');
+    if(input)input.value=product.manage_stock?current:'';
+}
+
+async function loadStockHistory(productId=activeStockProductId){
+    if(!productId)return;
+    const box=$('#rar-stock-history');
+    if(box)box.innerHTML='<div class="rar-dashboard-loading">Loading movement log…</div>';
+
+    try{
+        const data=await api('stock_history',{product_id:productId});
+        syncStockModalProduct(data.product);
+        renderStockHistory(data.history);
+    }catch(error){
+        if(box)box.innerHTML='<div class="rar-dashboard-empty">'+esc(error.message)+'</div>';
+        toast(error.message);
+    }
+}
+
+function openStockModal(product){
+    if(!product)return;
+    const modal=$('#rar-stock-modal');
+    if(!modal)return;
+
+    syncStockModalProduct(product);
+    modal.hidden=false;
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('rar-modal-open');
+    loadStockHistory(product.id);
+}
+
+function closeStockModal(){
+    const modal=$('#rar-stock-modal');
+    if(!modal)return;
+    modal.hidden=true;
+    modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('rar-modal-open');
+    activeStockProductId=0;
+}
+
+$('[data-close-stock-modal]').forEach(button=>button.addEventListener('click',closeStockModal));
+document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&!$('#rar-stock-modal')?.hidden)closeStockModal();
+});
+
+$('#rar-stock-history-refresh')?.addEventListener('click',()=>loadStockHistory());
+
+async function refreshStockViews(product,data){
+    if(product)syncStockModalProduct(product);
+    if(data?.history)renderStockHistory(data.history);
+    stockPage=1;
+    await loadProducts($('#rar-stock-search')?.value.trim()||'',false);
+    loadStats(false);
+}
+
+$('#rar-stock-modal')?.addEventListener('click',async event=>{
+    const quick=event.target.closest('[data-stock-delta]');
+    if(!quick||!activeStockProductId)return;
+
+    const delta=Number(quick.dataset.stockDelta||0);
+    const old=quick.textContent;
+    quick.disabled=true;
+    quick.textContent='…';
+
+    try{
+        const data=await api('stock_adjust',{product_id:activeStockProductId,delta});
+        toast(data.message);
+        await refreshStockViews(data.product,data);
+    }catch(error){
+        toast(error.message);
+    }finally{
+        quick.disabled=false;
+        quick.textContent=old;
+    }
+});
+
+$('#rar-stock-modal-save')?.addEventListener('click',async event=>{
+    if(!activeStockProductId)return;
+    const input=$('#rar-stock-modal-qty');
+    const qty=String(input?.value??'').trim();
+    if(qty===''||Number(qty)<0){
+        toast('Enter a valid stock quantity.');
+        input?.focus();
+        return;
+    }
+
+    const button=event.currentTarget;
+    const old=button.textContent;
+    button.disabled=true;
+    button.textContent='Saving…';
+
+    try{
+        const data=await api('stock_update',{product_id:activeStockProductId,qty});
+        toast(data.message);
+        await loadStockHistory(activeStockProductId);
+        await refreshStockViews(data.product);
+    }catch(error){
+        toast(error.message);
+    }finally{
+        button.disabled=false;
+        button.textContent=old;
+    }
+});
+
 $('#rar-stock-list')?.addEventListener('click',async event=>{
+    const open=event.target.closest('[data-open-stock]');
+    if(open){
+        const product=stockProducts.get(Number(open.dataset.openStock));
+        if(product)openStockModal(product);
+        return;
+    }
+
     const save=event.target.closest('[data-save]');
     if(!save)return;
 
@@ -493,7 +863,7 @@ function renderItems(){
         '</div>'
     ).join('');
 
-    $('#rar-item-count').textContent=items.length;
+    $('#rar-item-count').textContent=items.length+' item'+(items.length===1?'':'s');
     calculateTotals();
 }
 
@@ -936,7 +1306,7 @@ $('#rar-order-form')?.addEventListener('submit',async event=>{
     const fd=new FormData(form);
     const phone=normalizeBdPhone(fd.get('phone'));
     if(!phone){
-        toast('Enter a valid Bangladesh mobile number, e.g. +8801XXXXXXXXX.');
+        toast('Enter an 11-digit Bangladesh mobile number after +88, e.g. 01700000000.');
         form.elements.namedItem('phone')?.focus();
         return;
     }
@@ -1062,7 +1432,8 @@ function managerOrderRow(order){
         '</div>'+
         '<div class="rar-manager-order-actions">'+
             '<select class="rar-order-status">'+statusOptions(order.status)+'</select>'+
-            '<button type="button" class="rar-primary" data-update-status="'+order.id+'">Update Status</button>'+
+            '<div class="rar-manager-status-buttons"><button type="button" class="rar-primary" data-update-status="'+order.id+'">Update Status</button>'+
+            (managerUndo.has(String(order.id))?'<button type="button" class="rar-secondary rar-undo-status" data-undo-status="'+order.id+'">Undo</button>':'')+'</div>'+
         '</div>'+
     '</article>';
 }
@@ -1091,7 +1462,7 @@ function renderManagerOrders(){
 async function loadManagerOrders(mode=managerMode,append=false){
     if(!C.isManager)return;
 
-    const allowed=['all','live','today','completed','returns'];
+    const allowed=['all','live','today','processing','completed','returns'];
     const nextMode=allowed.includes(mode)?mode:'all';
 
     if(!append||nextMode!==managerMode){
@@ -1107,6 +1478,7 @@ async function loadManagerOrders(mode=managerMode,append=false){
         all:'All Orders',
         live:'Live Orders',
         today:"Today's Orders",
+        processing:'Processing Orders',
         completed:'Completed Orders',
         returns:'Returned / Cancelled Orders'
     };
@@ -1126,7 +1498,7 @@ async function loadManagerOrders(mode=managerMode,append=false){
     }
 }
 
-$('[data-orders-mode]').forEach(button=>{
+$$('[data-orders-mode]').forEach(button=>{
     button.addEventListener('click',()=>{
         if(!C.isManager)return;
         view('orders');
@@ -1143,6 +1515,35 @@ $('#rar-orders-more')?.addEventListener('click',()=>{
 $('#rar-orders-search')?.addEventListener('input',renderManagerOrders);
 
 $('#rar-manager-orders')?.addEventListener('click',async event=>{
+    const undoButton=event.target.closest('[data-undo-status]');
+    if(undoButton){
+        const id=String(undoButton.dataset.undoStatus);
+        const token=managerUndo.get(id);
+        if(!token)return;
+
+        const old=undoButton.textContent;
+        undoButton.disabled=true;
+        undoButton.textContent='Undoing…';
+
+        try{
+            const data=await api('undo_order_status',{token});
+            managerUndo.delete(id);
+            const index=managerOrders.findIndex(order=>String(order.id)===String(data.order.id));
+            if(index>=0)managerOrders[index]=data.order;
+            renderManagerOrders();
+            loadStats(false);
+            toast(data.message);
+        }catch(error){
+            managerUndo.delete(id);
+            renderManagerOrders();
+            toast(error.message);
+        }finally{
+            undoButton.disabled=false;
+            undoButton.textContent=old;
+        }
+        return;
+    }
+
     const button=event.target.closest('[data-update-status]');
     if(!button)return;
 
@@ -1157,17 +1558,16 @@ $('#rar-manager-orders')?.addEventListener('click',async event=>{
             order_id:button.dataset.updateStatus,
             status:select.value
         });
-        toast(data.message);
-        const index=managerOrders.findIndex(order=>String(order.id)===String(data.order.id));
+        const id=String(data.order.id);
+        if(data.undo?.token)managerUndo.set(id,data.undo.token);
+        else managerUndo.delete(id);
+
+        const index=managerOrders.findIndex(order=>String(order.id)===id);
         if(index>=0)managerOrders[index]=data.order;
 
-        if(managerMode==='live'){
-            const closed=['completed','cancelled','refunded','failed','returned'];
-            managerOrders=managerOrders.filter(order=>!closed.includes(order.status));
-        }
-
         renderManagerOrders();
-        loadStats();
+        loadStats(false);
+        toast(data.undo?.token?data.message+' Undo is available for 5 minutes.':data.message);
     }catch(error){
         toast(error.message);
     }finally{

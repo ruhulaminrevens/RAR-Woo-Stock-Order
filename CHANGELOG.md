@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.3.0 — 2026-09-25
+
+### Finalization — Stock / Order / Manager workflows
+- Added a Stock Manager quick-adjust modal with -1, +1, +5 and +10 controls plus exact quantity save.
+- Added per-product Movement Log with user, timestamp, previous quantity, new quantity and delta; history is capped to the most recent 60 manual changes.
+- Preserved WooCommerce as the inventory source of truth and continued using WooCommerce CRUD for stock writes.
+- Added strict +88-prefixed Bangladesh phone UI with an 11-digit local mobile input and existing server-side normalization.
+- Preserved automatic order date and WooCommerce-generated Order No on save.
+- Preserved searchable District and dependent Town / City / Upazila selectors.
+- Preserved color-coded product search, serial numbers, out-of-stock blocking, fixed/% discount, shipping, total and amount in words.
+- Preserved PNG Sales Order Slip generation and native file Share Sheet support for WhatsApp, Messenger and other installed mobile apps, with download fallback.
+- Added Shop Manager status Undo using a server-issued 5-minute token with stale-change protection.
+- Added manager Top Products, Payment Mix and Sales Channels for the selected 7/30/90-day reporting period.
+- Expanded runtime tests for quick stock adjustments, Movement Log, strict phone UI, status Undo, manager breakdowns and share integration.
+- Bumped plugin metadata and package validation to v1.3.0.
+
+### Checkpoint 1 — Dashboard/API foundation
+- Added a dedicated read-only reporting service for dashboard metrics, inventory health, recent orders, attention items and manager summaries.
+- Added period-aware dashboard APIs for Today, 7 days and This month.
+- Added manager reporting periods for 7, 30 and 90 days.
+- Added role-aware dashboard payloads so Staff and Shop Manager receive only the data/actions intended for their role.
+- Added managed-stock semantics: Available / Live counts only positive managed quantities; unmanaged stock remains separately visible as Not tracked.
+- Added units-in-hand and estimated stock-value metrics from WooCommerce product lookup data.
+- Added manager Order Control counts for All Orders, Live Orders and Processing.
+- Added manager Processing order drilldown.
+- Added recent-order and Needs Attention dashboard feeds.
+- Added 7-day sales/order trend data for lightweight charts.
+- Redesigned the dashboard into a responsive dark operations workspace inspired by the approved prototype while preserving the existing Stock Manager and Create Order workflows.
+- Added Staff-only simplified dashboard and Shop Manager-only Order Control / Sales & Growth sections.
+- Fixed manager dashboard action binding so every `data-orders-mode` button is interactive.
+- Preserved the v1.2.1 custom WooCommerce status normalization and resilient dashboard error handling.
+- Expanded runtime tests for Staff/Manager role separation, period metrics, manager Processing drilldown and the new dashboard payload.
+
 ## 1.2.1 — 2026-09-25
 
 ### Dashboard / Manager Fixes
