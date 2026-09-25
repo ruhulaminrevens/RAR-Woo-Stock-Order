@@ -118,6 +118,8 @@ HIGH_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR High S
 LOW_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Low Stock Product"); $p->set_sku("RARLOW001"); $p->set_regular_price("200"); $p->set_manage_stock(true); $p->set_stock_quantity(5); $p->set_stock_status("instock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
 OUT_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Out Stock Product"); $p->set_sku("RAROUT001"); $p->set_regular_price("300"); $p->set_manage_stock(true); $p->set_stock_quantity(0); $p->set_stock_status("outofstock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
 UNMANAGED_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Unmanaged Product"); $p->set_sku("RARUNMANAGED"); $p->set_regular_price("80"); $p->set_manage_stock(false); $p->set_stock_status("instock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
+CUSTOM_ID="$("${WP[@]}" eval '$o=wc_create_order(); $o->set_billing_first_name("Custom"); $o->set_billing_last_name("Status"); $o->set_total(50); $o->set_status("confirmed"); $o->save(); echo $o->get_id();')"
+echo "PASS: custom WooCommerce order status seeded"
 
 cat > "${WP_PATH}/router.php" <<'PHP'
 <?php
