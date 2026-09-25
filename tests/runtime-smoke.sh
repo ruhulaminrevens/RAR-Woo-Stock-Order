@@ -59,18 +59,18 @@ PLUGIN_DIR="${WP_PATH}/wp-content/plugins/rar-woo-stock-order"
 mkdir -p "${PLUGIN_DIR}"
 rsync -a --delete   --exclude='.git'   --exclude='.github'   --exclude='tests'   --exclude='dist'   ./ "${PLUGIN_DIR}/"
 
-echo "== Seed v1.1 state and activate v1.2.0 =="
-"${WP[@]}" eval 'update_option("rar_wso_version","1.1.0"); update_option("rar_wso_settings", array("enabled"=>"yes","staff_slug"=>"staff","default_order_status"=>"processing","allow_price_override"=>"yes","default_shipping"=>"0","dashboard_title"=>"Woo Stock & Order"));'
+echo "== Seed v1.2.0 state and activate v1.2.1 =="
+"${WP[@]}" eval 'update_option("rar_wso_version","1.2.0"); update_option("rar_wso_settings", array("enabled"=>"yes","staff_slug"=>"staff","default_order_status"=>"processing","allow_price_override"=>"yes","default_shipping"=>"0","dashboard_title"=>"Woo Stock & Order"));'
 "${WP[@]}" plugin activate rar-woo-stock-order
 
 VERSION_JSON="$("${WP[@]}" eval '$r=get_role("rar_wso_staff"); echo wp_json_encode(array("version"=>get_option("rar_wso_version"),"settings"=>get_option("rar_wso_settings"),"caps"=>$r ? $r->capabilities : array(),"shop_manager_edit_products"=>get_role("shop_manager") ? get_role("shop_manager")->has_cap("edit_products") : false));')"
-assert_jq "${VERSION_JSON}" '.version=="1.2.0"' "upgrade version migrated to 1.2.0"
+assert_jq "${VERSION_JSON}" '.version=="1.2.1"' "upgrade version migrated to 1.2.1"
 assert_jq "${VERSION_JSON}" '.caps.rar_wso_manage_stock==true and .caps.rar_wso_create_orders==true' "staff stock/order capabilities preserved"
 assert_jq "${VERSION_JSON}" '.shop_manager_edit_products==true' "Shop Manager native product editing preserved"
 
 PLUGIN_VERSION="$("${WP[@]}" plugin get rar-woo-stock-order --field=version)"
-[[ "${PLUGIN_VERSION}" == "1.2.0" ]] || fail "Expected plugin version 1.2.0, got ${PLUGIN_VERSION}"
-echo "PASS: plugin version is 1.2.0"
+[[ "${PLUGIN_VERSION}" == "1.2.1" ]] || fail "Expected plugin version 1.2.1, got ${PLUGIN_VERSION}"
+echo "PASS: plugin version is 1.2.1"
 
 echo "== Validate Bangladesh address data against WooCommerce states =="
 ADDRESS_CHECK="$("${WP[@]}" eval '$bad=array(); foreach(RAR_WSO_Data::districts() as $d){ if(!RAR_WSO_Data::district_to_state_code($d)){ $bad[]=$d; } } echo wp_json_encode(array("districts"=>count(RAR_WSO_Data::districts()),"bad"=>$bad,"dhaka_cities"=>RAR_WSO_Data::city_map()["Dhaka"]??array()));')"
@@ -120,7 +120,7 @@ echo "== Staff login and UI =="
 login_user staff 'StaffPass123!' "${STAFF_COOKIE}" /tmp/rar-wso-staff-login.html
 curl -fsS -b "${STAFF_COOKIE}" "${BASE_URL}/staff/" -o "${STAFF_HTML}"
 
-grep -q 'Secure staff workspace · v1.2.0' "${STAFF_HTML}" || fail "Staff app missing v1.2.0 marker"
+grep -q 'Secure staff workspace · v1.2.1' "${STAFF_HTML}" || fail "Staff app missing v1.2.1 marker"
 grep -q "Today's Date" "${STAFF_HTML}" || fail "Professional dashboard date bar missing"
 grep -q 'Available / Live' "${STAFF_HTML}" || fail "Inventory dashboard cards missing"
 grep -q 'Save & Share' "${STAFF_HTML}" || fail "Save & Share action missing"
@@ -133,7 +133,7 @@ if grep -q '&#2547;' "${STAFF_HTML}" || grep -q '&amp;nbsp;' "${STAFF_HTML}"; th
 fi
 grep -q '"currency":"৳"' "${STAFF_HTML}" || fail "BDT currency symbol not localized as plain Unicode"
 grep -q '"Savar"' "${STAFF_HTML}" || fail "Bangladesh town/upazila data missing from client config"
-echo "PASS: staff UI renders professional v1.2.0 layout with plain BDT currency"
+echo "PASS: staff UI renders professional v1.2.1 layout with plain BDT currency"
 
 STAFF_NONCE="$(extract_nonce "${STAFF_HTML}")"
 [[ -n "${STAFF_NONCE}" ]] || fail "Could not extract staff AJAX nonce"
@@ -222,15 +222,15 @@ MANIFEST="$(curl -fsS "${BASE_URL}/rar-wso-manifest.webmanifest")"
 assert_jq "${MANIFEST}" '.display=="standalone" and (.start_url|contains("/staff/"))' "manifest endpoint"
 
 SERVICE_WORKER="$(curl -fsS "${BASE_URL}/rar-wso-sw.js")"
-grep -q "rar-wso-assets-1.2.0-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
+grep -q "rar-wso-assets-1.2.1-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
 grep -q "u.pathname.startsWith(STAFF_PATH)" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass authenticated staff HTML"
 grep -q "u.pathname.startsWith('/wp-admin/')" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass wp-admin"
 echo "PASS: service worker private-cache protections"
 
-JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.2.0")"
+JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.2.1")"
 if grep -q '&#2547;' <<<"${JS_BODY}" || grep -q '&nbsp;' <<<"${JS_BODY}"; then
   fail "Raw BDT HTML entities exist in shipped staff JavaScript"
 fi
 echo "PASS: BDT currency regression guard"
 
-echo "All RAR Woo Stock & Order v1.2.0 runtime smoke tests passed."
+echo "All RAR Woo Stock & Order v1.2.1 runtime smoke tests passed."
