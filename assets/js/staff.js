@@ -157,6 +157,7 @@ function updateClock(){
 }
 
 updateClock();
+document.body.classList.add('rar-dashboard-active');
 setInterval(updateClock,1000);
 
 function view(name){
