@@ -245,52 +245,27 @@ class RAR_WSO_Ajax {
     public function stats() {
         $this->guard();
 
-        $data = array_merge(
-            array(
-                'today_orders'       => 0,
-                'today_sales'        => 0.0,
-                'completed_orders'   => 0,
-                'returned_cancelled' => 0,
-            ),
-            $this->inventory_stats()
-        );
+        $period         = isset( $_POST['period'] ) ? sanitize_key( wp_unslash( $_POST['period'] ) ) : 'today';
+        $manager_period = isset( $_POST['manager_period'] ) ? sanitize_key( wp_unslash( $_POST['manager_period'] ) ) : '30days';
 
         try {
-            $data = array_merge( $data, $this->order_metrics_today() );
+            $data = RAR_WSO_Reports::dashboard(
+                $period,
+                $manager_period,
+                current_user_can( 'manage_woocommerce' )
+            );
         } catch ( Throwable $e ) {
-            $data['stats_warning'] = __( 'Order metrics are temporarily unavailable.', 'rar-woo-stock-order' );
             if ( function_exists( 'wc_get_logger' ) ) {
                 wc_get_logger()->error(
-                    'Dashboard order metrics failed: ' . $e->getMessage(),
+                    'Dashboard API failed: ' . $e->getMessage(),
                     array( 'source' => 'rar-wso' )
                 );
             }
-        }
 
-        if ( current_user_can( 'manage_woocommerce' ) ) {
-            try {
-                $data['analytics'] = $this->manager_analytics();
-            } catch ( Throwable $e ) {
-                $labels = array();
-                for ( $i = 6; $i >= 0; $i-- ) {
-                    $labels[] = wp_date( 'D', strtotime( '-' . $i . ' days' ) );
-                }
-
-                $data['analytics'] = array(
-                    'labels'     => $labels,
-                    'sales'      => array_fill( 0, 7, 0.0 ),
-                    'week_total' => 0.0,
-                    'growth_pct' => 0.0,
-                    'warning'    => __( 'Sales analytics are temporarily unavailable.', 'rar-woo-stock-order' ),
-                );
-
-                if ( function_exists( 'wc_get_logger' ) ) {
-                    wc_get_logger()->error(
-                        'Manager analytics failed: ' . $e->getMessage(),
-                        array( 'source' => 'rar-wso' )
-                    );
-                }
-            }
+            wp_send_json_error(
+                array( 'message' => __( 'Dashboard data is temporarily unavailable. Please retry.', 'rar-woo-stock-order' ) ),
+                500
+            );
         }
 
         wp_send_json_success( $data );
@@ -870,6 +845,8 @@ class RAR_WSO_Ajax {
         } elseif ( 'today' === $mode ) {
             $today                = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
             $args['date_created'] = '>=' . $today . ' 00:00:00';
+        } elseif ( 'processing' === $mode ) {
+            $args['status'] = array( 'processing' );
         } elseif ( 'completed' === $mode ) {
             $args['status'] = array( 'completed' );
         } elseif ( 'returns' === $mode ) {
@@ -890,7 +867,7 @@ class RAR_WSO_Ajax {
         wp_send_json_success(
             array(
                 'orders'   => $items,
-                'mode'     => in_array( $mode, array( 'live', 'today', 'completed', 'returns' ), true ) ? $mode : 'all',
+                'mode'     => in_array( $mode, array( 'live', 'today', 'processing', 'completed', 'returns' ), true ) ? $mode : 'all',
                 'page'     => $page,
                 'has_more' => $page < $max_pages,
                 'total'    => is_object( $query ) && isset( $query->total ) ? (int) $query->total : count( $items ),
