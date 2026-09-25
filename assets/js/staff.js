@@ -16,6 +16,8 @@ let stockPage=1;
 let stockHasMore=false;
 let managerMode='all';
 let managerOrders=[];
+let managerPage=1;
+let managerHasMore=false;
 let lastSlipUrl='';
 
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({
@@ -992,13 +994,20 @@ function renderManagerOrders(){
         : '<div class="rar-empty">No matching orders.</div>';
 }
 
-async function loadManagerOrders(mode=managerMode){
+async function loadManagerOrders(mode=managerMode,append=false){
     if(!C.isManager)return;
 
     const allowed=['all','live','today','completed','returns'];
-    managerMode=allowed.includes(mode)?mode:'all';
+    const nextMode=allowed.includes(mode)?mode:'all';
+
+    if(!append||nextMode!==managerMode){
+        managerPage=1;
+        managerOrders=[];
+    }
+
+    managerMode=nextMode;
     const box=$('#rar-manager-orders');
-    if(box)box.innerHTML='<div class="rar-empty">Loading orders…</div>';
+    if(box&&!append)box.innerHTML='<div class="rar-empty">Loading orders…</div>';
 
     const titles={
         all:'All Orders',
@@ -1010,23 +1019,33 @@ async function loadManagerOrders(mode=managerMode){
     $('#rar-orders-title').textContent=titles[managerMode]||'Orders';
 
     try{
-        const data=await api('manager_orders',{mode:managerMode});
-        managerOrders=data.orders||[];
+        const data=await api('manager_orders',{mode:managerMode,page:managerPage});
+        managerOrders=append?managerOrders.concat(data.orders||[]):(data.orders||[]);
+        managerHasMore=Boolean(data.has_more);
         renderManagerOrders();
+
+        const more=$('#rar-orders-more');
+        if(more)more.hidden=!managerHasMore;
     }catch(error){
-        if(box)box.innerHTML='<div class="rar-empty">'+esc(error.message)+'</div>';
+        if(box&&!append)box.innerHTML='<div class="rar-empty">'+esc(error.message)+'</div>';
         toast(error.message);
     }
 }
 
-$$('[data-orders-mode]').forEach(button=>{
+$('[data-orders-mode]').forEach(button=>{
     button.addEventListener('click',()=>{
+        if(!C.isManager)return;
         view('orders');
-        loadManagerOrders(button.dataset.ordersMode);
+        loadManagerOrders(button.dataset.ordersMode,false);
     });
 });
 
-$('#rar-orders-refresh')?.addEventListener('click',()=>loadManagerOrders());
+$('#rar-orders-refresh')?.addEventListener('click',()=>loadManagerOrders(managerMode,false));
+$('#rar-orders-more')?.addEventListener('click',()=>{
+    if(!managerHasMore)return;
+    managerPage++;
+    loadManagerOrders(managerMode,true);
+});
 $('#rar-orders-search')?.addEventListener('input',renderManagerOrders);
 
 $('#rar-manager-orders')?.addEventListener('click',async event=>{
