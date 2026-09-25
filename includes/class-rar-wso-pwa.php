@@ -190,72 +190,174 @@ class RAR_WSO_PWA {
 </header>
 
 <main>
-<section id="rar-dashboard" class="rar-view active">
-    <div class="rar-datebar">
-        <span>Today's Date</span>
-        <strong id="rar-live-clock">—</strong>
+<section id="rar-dashboard" class="rar-view active rar-dashboard-v13">
+    <div class="rar-dashboard-hero">
+        <div class="rar-dashboard-date">
+            <span class="rar-eyebrow"><i></i> TODAY'S DATE</span>
+            <strong id="rar-live-clock">—</strong>
+            <small>Good <span id="rar-daypart">day</span>, <?php echo esc_html( $user->display_name ); ?> · <?php echo $is_manager ? esc_html__( 'Shop Manager', 'rar-woo-stock-order' ) : esc_html__( 'Staff', 'rar-woo-stock-order' ); ?></small>
+        </div>
+        <div class="rar-quick-actions">
+            <?php if ( RAR_WSO_Plugin::can( 'rar_wso_create_orders' ) ) : ?>
+                <button class="rar-quick-btn quick-order" data-view="order" type="button"><b>＋</b><span><strong>Create Order</strong><small>নতুন অর্ডার নিন</small></span></button>
+            <?php endif; ?>
+            <?php if ( RAR_WSO_Plugin::can( 'rar_wso_manage_stock' ) ) : ?>
+                <button class="rar-quick-btn quick-stock" data-view="stock" type="button"><b>≋</b><span><strong>Stock Manager</strong><small>স্টক দেখুন ও আপডেট করুন</small></span></button>
+            <?php endif; ?>
+        </div>
     </div>
 
-    <div class="rar-stats rar-stats-orders">
-        <button class="rar-stat stat-blue" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
-            <span>Today's Orders</span><strong id="stat-orders">—</strong><small><?php echo $is_manager ? 'Tap to view today' : 'Total orders today'; ?></small>
+    <div class="rar-dashboard-heading">
+        <h2>Orders</h2>
+        <div class="rar-period-switch" aria-label="Dashboard period">
+            <button type="button" class="active" data-dashboard-period="today">Today</button>
+            <button type="button" data-dashboard-period="7days">7 days</button>
+            <button type="button" data-dashboard-period="month">This month</button>
+        </div>
+    </div>
+
+    <div class="rar-v13-kpi-grid">
+        <button class="rar-v13-kpi kpi-orders" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
+            <span class="rar-kpi-icon">▣</span>
+            <small id="stat-orders-label">Today's Orders</small>
+            <strong id="stat-orders">—</strong>
+            <em id="stat-orders-sub">Loading…</em>
         </button>
-        <button class="rar-stat stat-teal" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
-            <span>Today's Sales</span><strong id="stat-sales">—</strong><small><?php echo $is_manager ? 'Tap to view today' : 'Total active sales'; ?></small>
+        <button class="rar-v13-kpi kpi-sales" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
+            <span class="rar-kpi-icon">৳</span>
+            <small id="stat-sales-label">Today's Sales</small>
+            <strong id="stat-sales">—</strong>
+            <em id="stat-sales-sub">Loading…</em>
         </button>
-        <button class="rar-stat stat-green" type="button"<?php echo $is_manager ? ' data-orders-mode="completed"' : ''; ?>>
-            <span>Completed Orders</span><strong id="stat-completed">—</strong><small><?php echo $is_manager ? 'Tap to view completed' : 'Total completed orders'; ?></small>
+        <button class="rar-v13-kpi kpi-completed" type="button"<?php echo $is_manager ? ' data-orders-mode="completed"' : ''; ?>>
+            <span class="rar-kpi-icon">✓</span>
+            <small>Completed Orders</small>
+            <strong id="stat-completed-period">—</strong>
+            <em id="stat-completed-sub">Loading…</em>
         </button>
-        <button class="rar-stat stat-red" type="button"<?php echo $is_manager ? ' data-orders-mode="returns"' : ''; ?>>
-            <span>Returned / Cancelled</span><strong id="stat-returned">—</strong><small><?php echo $is_manager ? 'Tap to view exceptions' : 'Returned, refunded or cancelled'; ?></small>
+        <button class="rar-v13-kpi kpi-returned" type="button"<?php echo $is_manager ? ' data-orders-mode="returns"' : ''; ?>>
+            <span class="rar-kpi-icon">↶</span>
+            <small>Returned / Cancelled</small>
+            <strong id="stat-returned-period">—</strong>
+            <em id="stat-returned-sub">Loading…</em>
         </button>
     </div>
 
-    <div class="rar-block-title">
-        <div><span>Inventory overview</span><small>Tap a card to open filtered stock</small></div>
-    </div>
-    <div class="rar-inventory-cards">
-        <button class="rar-inventory-card inventory-all" type="button" data-stock-filter="all">
-            <span class="icon">▦</span><span>All Stock</span><strong id="stat-all-stock">—</strong><small>All published stock items</small>
-        </button>
-        <button class="rar-inventory-card inventory-live" type="button" data-stock-filter="available">
-            <span class="icon">✓</span><span>Available / Live</span><strong id="stat-available">—</strong><small>Ready to sell</small>
-        </button>
-        <button class="rar-inventory-card inventory-out" type="button" data-stock-filter="out">
-            <span class="icon">!</span><span>Out of Stock</span><strong id="stat-out">—</strong><small>Needs attention</small>
-        </button>
+    <div class="rar-dashboard-heading rar-stock-heading">
+        <h2>Stock</h2>
+        <div class="rar-stock-key">
+            <span class="key-high">10+ in stock</span>
+            <span class="key-low">Low 1–10</span>
+            <span class="key-out">Stock out</span>
+            <span class="key-unmanaged">Not tracked</span>
+        </div>
     </div>
 
-    <div class="rar-actions-home">
-        <?php if ( RAR_WSO_Plugin::can( 'rar_wso_manage_stock' ) ) : ?>
-            <button class="rar-big-btn action-stock" data-view="stock" type="button"><span>📦</span><strong>Stock Manager</strong><small>Search, filter & update inventory</small></button>
-        <?php endif; ?>
-        <?php if ( RAR_WSO_Plugin::can( 'rar_wso_create_orders' ) ) : ?>
-            <button class="rar-big-btn action-order" data-view="order" type="button"><span>🧾</span><strong>Create Order</strong><small>Fast mobile sales order entry</small></button>
-        <?php endif; ?>
+    <div class="rar-v13-stock-grid">
+        <button class="rar-v13-stock-card stock-all" type="button" data-stock-filter="all">
+            <div class="rar-stock-card-top"><span class="rar-kpi-icon">◇</span><i>↗</i></div>
+            <small>All Stock</small>
+            <strong><span id="stat-all-stock">—</span><em> products</em></strong>
+            <div class="rar-stock-composition" aria-hidden="true">
+                <i class="comp-high" id="rar-comp-high"></i>
+                <i class="comp-low" id="rar-comp-low"></i>
+                <i class="comp-out" id="rar-comp-out"></i>
+                <i class="comp-unmanaged" id="rar-comp-unmanaged"></i>
+            </div>
+            <div class="rar-stock-breakdown">
+                <span class="high"><b id="dash-high">—</b> 10+</span>
+                <span class="low"><b id="dash-low">—</b> low</span>
+                <span class="out"><b id="dash-out">—</b> out</span>
+                <span class="unmanaged"><b id="dash-unmanaged">—</b> not tracked</span>
+            </div>
+            <em id="dash-stock-units">— units in hand</em>
+        </button>
+
+        <button class="rar-v13-stock-card stock-live" type="button" data-stock-filter="available">
+            <div class="rar-stock-card-top"><span class="rar-kpi-icon">↗</span><i>↗</i></div>
+            <small>Available / Live Stock</small>
+            <strong><span id="stat-available">—</span><em> products</em></strong>
+            <div class="rar-stock-breakdown">
+                <span class="high"><b id="dash-healthy">—</b> healthy</span>
+                <span class="low"><b id="dash-low-2">—</b> low</span>
+            </div>
+            <em>Managed quantity ready to sell</em>
+        </button>
+
+        <button class="rar-v13-stock-card stock-out" type="button" data-stock-filter="out">
+            <div class="rar-stock-card-top"><span class="rar-kpi-icon">⊘</span><i>↗</i></div>
+            <small>Out of Stock</small>
+            <strong><span id="stat-out">—</span><em> products</em></strong>
+            <div id="rar-out-preview" class="rar-out-preview">Tap to review unavailable products</div>
+            <em>Needs attention</em>
+        </button>
     </div>
 
     <?php if ( $is_manager ) : ?>
-    <div class="rar-manager-zone">
-        <div class="rar-block-title">
-            <div><span>Manager Control Center</span><small>Live order actions and sales intelligence</small></div>
+    <div class="rar-manager-zone-v13">
+        <div class="rar-dashboard-heading">
+            <h2>Order Control <span>SHOP MANAGER</span></h2>
         </div>
-        <div class="rar-manager-actions">
-            <button type="button" class="rar-manager-btn" data-orders-mode="all"><span>📋</span><strong>All Orders</strong><small>View and update every recent order</small></button>
-            <button type="button" class="rar-manager-btn" data-orders-mode="live"><span>⚡</span><strong>Live Orders</strong><small>Only running / incomplete orders</small></button>
+        <div class="rar-order-control-grid">
+            <button type="button" class="rar-order-control-card all-orders" data-orders-mode="all">
+                <span class="rar-kpi-icon">☷</span><small>All Orders</small>
+                <strong id="manager-all-orders">—</strong><em>orders</em>
+                <p>View & update recent orders</p>
+            </button>
+            <button type="button" class="rar-order-control-card live-orders" data-orders-mode="live">
+                <span class="rar-kpi-icon">▣</span><small>Live Orders</small>
+                <strong id="manager-live-orders">—</strong><em>running</em>
+                <p>Pending / processing / confirmed</p>
+            </button>
+            <button type="button" class="rar-order-control-card processing-orders" data-orders-mode="processing">
+                <span class="rar-kpi-icon">◉</span><small>Total Processing</small>
+                <strong id="manager-processing-orders">—</strong><em>orders</em>
+                <p>Currently being prepared</p>
+            </button>
         </div>
-        <div class="rar-analytics-card">
-            <div class="rar-analytics-head">
-                <div><span>7-Day Sales</span><strong id="rar-week-sales">—</strong></div>
-                <div class="rar-growth" id="rar-growth">—</div>
+
+        <div class="rar-dashboard-heading">
+            <h2>Sales &amp; Growth <span>SHOP MANAGER</span></h2>
+            <div class="rar-period-switch rar-manager-period-switch" aria-label="Manager reporting period">
+                <button type="button" data-manager-period="7days">7 days</button>
+                <button type="button" class="active" data-manager-period="30days">30 days</button>
+                <button type="button" data-manager-period="90days">90 days</button>
             </div>
-            <div id="rar-sales-chart" class="rar-sales-chart" aria-label="7 day sales bar chart"></div>
+        </div>
+
+        <div class="rar-manager-metrics">
+            <div><small id="mgr-sales-label">Sales · 30 days</small><strong id="mgr-sales">—</strong><em id="mgr-sales-change">—</em></div>
+            <div><small>Orders</small><strong id="mgr-orders">—</strong><em id="mgr-orders-change">—</em></div>
+            <div><small>Average order</small><strong id="mgr-average">—</strong><em>sales orders only</em></div>
+            <div><small>Items sold</small><strong id="mgr-items">—</strong><em>excluding returned/cancelled</em></div>
+        </div>
+
+        <div class="rar-v13-chart-card">
+            <div class="rar-chart-head"><strong>Sales trend</strong><span id="rar-week-sales">—</span></div>
+            <div id="rar-sales-chart" class="rar-sales-chart rar-sales-chart-v13" aria-label="7 day sales chart"></div>
+            <div class="rar-growth" id="rar-growth">—</div>
         </div>
     </div>
     <?php endif; ?>
 
-    <div class="rar-install-tip"><strong>Phone tip:</strong> Chrome → Add to Home Screen to use this like an app.</div>
-    <div class="rar-app-meta">Secure staff workspace · v<?php echo esc_html( RAR_WSO_VERSION ); ?></div>
+    <div class="rar-dashboard-lower">
+        <section class="rar-v13-panel">
+            <div class="rar-panel-head"><strong>Sales · last 7 days</strong><span id="rar-seven-total">—</span></div>
+            <div id="rar-seven-chart" class="rar-mini-bars"></div>
+        </section>
+        <section class="rar-v13-panel">
+            <div class="rar-panel-head"><strong>Needs attention</strong><span id="rar-attention-count">—</span></div>
+            <div id="rar-attention-list" class="rar-attention-list"><div class="rar-dashboard-loading">Loading…</div></div>
+        </section>
+    </div>
+
+    <section class="rar-v13-panel rar-recent-panel">
+        <div class="rar-panel-head"><strong><?php echo $is_manager ? esc_html__( 'Recent orders', 'rar-woo-stock-order' ) : esc_html__( 'My recent orders', 'rar-woo-stock-order' ); ?></strong><?php if ( $is_manager ) : ?><button type="button" data-orders-mode="all">See all</button><?php endif; ?></div>
+        <div id="rar-recent-orders" class="rar-recent-orders"><div class="rar-dashboard-loading">Loading…</div></div>
+    </section>
+
+    <div class="rar-install-tip rar-install-tip-dark"><strong>Phone tip:</strong> Chrome → Add to Home Screen to use this like an app.</div>
+    <div class="rar-app-meta">Secure staff workspace · v<?php echo esc_html( RAR_WSO_VERSION ); ?> · v1.3 dashboard preview</div>
 </section>
 
 <section id="rar-stock" class="rar-view">
