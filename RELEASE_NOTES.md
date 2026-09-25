@@ -1,57 +1,30 @@
-# RAR Woo Stock & Order v1.2.0
+# RAR Woo Stock & Order v1.2.1
 
 **Release date:** 2026-09-25
 
-v1.2.0 upgrades the focused Stock Manager + Staff Order Entry PWA into a more complete professional operations workspace while keeping product catalog management in native WooCommerce.
+v1.2.1 is a production hotfix for the v1.2.0 dashboard / manager loading issue seen on stores that register custom WooCommerce order statuses.
 
-## Major improvements
+## Fixed
 
-- redesigned colorful, clickable dashboard
-- live date/time
-- richer daily order/sales metrics
-- All / Available / Out inventory cards
-- healthy / low / out / unmanaged stock color bands
-- optimized filtered Stock Manager
-- Bangladesh phone validation
-- searchable district + dependent Town/City/Upazila selection
-- stock-aware product search
-- out-of-stock ordering blocked
-- serial-numbered order items
-- fixed/percentage discount
-- total in words
-- Save & Share PNG sales-order slip
-- Shop Manager All Orders / Live Orders
-- manager order status updates
-- 7-day sales chart and growth
+- Dashboard metrics now query WooCommerce with normalized registered status slugs.
+- Manager Control Center All Orders / Live Orders / drill-down queries support custom order statuses correctly.
+- 7-day manager analytics uses the same normalized status handling.
+- Inventory metrics still load even if an order-specific metric encounters an exception.
+- Dashboard retries automatically after a failed request and refreshes periodically / when the app becomes visible again.
+- Manager sales chart shows an explicit empty or warning message rather than a blank panel.
 
-## Important currency fix
+## Sales Order Slip
 
-WooCommerce BDT symbols are now normalized to plain Unicode before reaching JavaScript. Raw strings such as:
+The PNG slip now uses:
 
-`0.00&#2547;&nbsp;`
+**SL | IMAGE | ITEM | QTY | RATE | AMOUNT**
 
-must no longer appear in dashboard, stock, search or order totals.
+Product thumbnails are retained from product search and drawn into the slip with a safe fallback if a source image cannot be loaded.
 
-## Role design
+## Validation focus
 
-**Woo Stock & Order Staff**
-
-- stock updates
-- fast order creation
-- optional line-price override
-
-**Shop Manager / Administrator**
-
-- everything above
-- All Orders / Live Orders
-- status updates
-- sales analytics
-- regular WooCommerce product management
-
-## Release validation
-
-The automated runtime suite boots a real WordPress + WooCommerce environment and validates stock, orders, discount calculation, Bangladesh address rules, BDT currency, manager actions, analytics and PWA privacy before release.
+The runtime suite covers dashboard metrics, manager order APIs, custom WooCommerce statuses, inventory values, order creation, discounts, stock changes, Bangladesh address rules, PWA privacy and release packaging.
 
 Use the official release asset:
 
-`rar-woo-stock-order-v1.2.0.zip`
+`rar-woo-stock-order-v1.2.1.zip`
