@@ -781,16 +781,21 @@ async function buildSlipFile(order,snapshot){
     return new File([blob],'sales-order-'+String(order.order_num)+'.png',{type:'image/png'});
 }
 
-function downloadFile(file){
+function objectUrlForFile(file){
     if(lastSlipUrl)URL.revokeObjectURL(lastSlipUrl);
     lastSlipUrl=URL.createObjectURL(file);
+    return lastSlipUrl;
+}
+
+function downloadFile(file){
+    const url=objectUrlForFile(file);
     const a=document.createElement('a');
-    a.href=lastSlipUrl;
+    a.href=url;
     a.download=file.name;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    return lastSlipUrl;
+    return url;
 }
 
 async function shareFile(file,orderNum){
@@ -906,7 +911,7 @@ $('#rar-order-form')?.addEventListener('submit',async event=>{
             '<button type="button" id="rar-slip-share" class="rar-secondary">Share Slip</button></span>';
 
         const slipFile=await buildSlipFile(data,snapshot);
-        const url=downloadFile(slipFile);
+        const url=objectUrlForFile(slipFile);
 
         const download=$('#rar-slip-download');
         if(download){
