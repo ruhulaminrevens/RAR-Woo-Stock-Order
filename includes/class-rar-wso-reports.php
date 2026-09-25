@@ -321,28 +321,24 @@ final class RAR_WSO_Reports {
     }
 
     private static function recent_orders( $is_manager ) {
-        $args = array(
-            'limit'   => 6,
-            'return'  => 'objects',
-            'orderby' => 'date',
-            'order'   => 'DESC',
-            'status'  => self::registered_statuses(),
+        $orders = wc_get_orders(
+            array(
+                'limit'   => $is_manager ? 6 : 50,
+                'return'  => 'objects',
+                'orderby' => 'date',
+                'order'   => 'DESC',
+                'status'  => self::registered_statuses(),
+            )
         );
 
-        if ( ! $is_manager ) {
-            $args['meta_query'] = array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-                array(
-                    'key'     => '_rar_wso_created_by',
-                    'value'   => (string) get_current_user_id(),
-                    'compare' => '=',
-                ),
-            );
-        }
-
-        $orders = wc_get_orders( $args );
-        $items  = array();
+        $items   = array();
+        $user_id = get_current_user_id();
 
         foreach ( $orders as $order ) {
+            if ( ! $is_manager && absint( $order->get_meta( '_rar_wso_created_by' ) ) !== $user_id ) {
+                continue;
+            }
+
             $created = $order->get_date_created();
             $items[] = array(
                 'id'           => $order->get_id(),
@@ -357,6 +353,10 @@ final class RAR_WSO_Reports {
                 'created'      => $created ? wp_date( 'M j, h:i a', $created->getTimestamp() ) : '',
                 'channel'      => sanitize_key( (string) $order->get_meta( '_rar_wso_channel' ) ),
             );
+
+            if ( count( $items ) >= 6 ) {
+                break;
+            }
         }
 
         return $items;
