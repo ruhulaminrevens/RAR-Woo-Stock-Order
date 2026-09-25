@@ -55,6 +55,37 @@ echo "== Install WooCommerce =="
 "${WP[@]}" option update woocommerce_currency_pos right_space
 "${WP[@]}" option update woocommerce_price_num_decimals 2
 
+echo "== Register live-like custom WooCommerce order statuses =="
+mkdir -p "${WP_PATH}/wp-content/mu-plugins"
+cat > "${WP_PATH}/wp-content/mu-plugins/rar-wso-live-statuses.php" <<'PHP'
+<?php
+add_action( 'init', static function () {
+    foreach ( array(
+        'wc-confirmed'       => 'Confirmed',
+        'wc-order-confirmed' => 'Order Confirmed',
+        'wc-returned'        => 'Returned',
+    ) as $slug => $label ) {
+        register_post_status(
+            $slug,
+            array(
+                'label'                     => $label,
+                'public'                    => true,
+                'exclude_from_search'       => false,
+                'show_in_admin_all_list'    => true,
+                'show_in_admin_status_list' => true,
+                'label_count'               => _n_noop( $label . ' <span class="count">(%s)</span>', $label . ' <span class="count">(%s)</span>' ),
+            )
+        );
+    }
+} );
+add_filter( 'wc_order_statuses', static function ( $statuses ) {
+    $statuses['wc-confirmed']       = 'Confirmed';
+    $statuses['wc-order-confirmed'] = 'Order Confirmed';
+    $statuses['wc-returned']        = 'Returned';
+    return $statuses;
+} );
+PHP
+
 PLUGIN_DIR="${WP_PATH}/wp-content/plugins/rar-woo-stock-order"
 mkdir -p "${PLUGIN_DIR}"
 rsync -a --delete   --exclude='.git'   --exclude='.github'   --exclude='tests'   --exclude='dist'   ./ "${PLUGIN_DIR}/"
