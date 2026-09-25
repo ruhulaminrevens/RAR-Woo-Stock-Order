@@ -5,122 +5,103 @@
 
 Professional mobile-first WooCommerce staff PWA for **inventory control, fast order entry, manager order actions, sales analytics and shareable sales-order slips**.
 
-## Current release
+## Current code version
 
-**v1.2.1**
+**v1.3.0**
 
-Installable ZIP:
+The canonical installable ZIP is built and validated by GitHub Actions from the repository source. GitHub Release publishing is kept separate from source validation.
 
-[Download RAR Woo Stock & Order v1.2.1](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.2.1/rar-woo-stock-order-v1.2.1.zip)
+## v1.3.0 feature set
 
-## v1.2.1 hotfix
+### Role-aware operations dashboard
 
-- fixes dashboard metrics failing on stores with custom WooCommerce order statuses
-- fixes Manager Control Center order loading / analytics with custom statuses
-- keeps inventory metrics available even if an order-metric query fails
-- adds automatic dashboard retry / refresh behavior
-- adds clear empty/warning states for manager sales analytics
-- adds product thumbnails to PNG Sales Order Slip: **SL | IMAGE | ITEM | QTY | RATE | AMOUNT**
+Staff users receive:
+- Today / 7 days / This month order and sales periods
+- Orders, Sales, Completed and Returned / Cancelled
+- inventory health and stock composition
+- 7-day sales snapshot
+- Needs Attention
+- My Recent Orders
+- Create Order / Stock Manager quick actions
 
-## v1.2.0 feature set
+Shop Manager users receive all Staff features plus:
+- All Orders
+- Live Orders
+- Total Processing
+- status changes with safe 5-minute Undo
+- Sales & Growth for 7 / 30 / 90 days
+- sales trend
+- Top Products
+- Payment Mix
+- Sales Channels
 
-### Professional dashboard
+Inventory semantics:
+- **Healthy:** managed stock 11+
+- **Low:** managed stock 1–10
+- **Out:** zero quantity / out-of-stock
+- **Not Tracked:** WooCommerce stock management disabled
 
-- live local date/time
-- Today's Orders
-- Today's Sales
-- Completed Orders
-- Returned / Cancelled Orders
-- All Stock
-- Available / Live Stock
-- Out of Stock
-- clickable inventory cards
-- color-coded inventory health
-- 7-day manager sales chart and growth
-
-Inventory colors:
-
-- **Green:** 11+ managed stock
-- **Orange:** 1–10 managed stock
-- **Red:** 0 / out of stock
-- **Blue:** stock quantity not managed yet
-
-### Advanced Stock Manager
+### Stock Manager
 
 - item/SKU search
-- filter by All / Healthy / Low / Out / Unmanaged
-- color-highlighted product cards
-- product image, SKU, selling price, regular price, stock state and quantity
-- direct stock updates through WooCommerce CRUD
-- explicit **Set stock** action for unmanaged products
+- All / Healthy / Low / Out / Unmanaged filters
+- product image, SKU, price, stock state and quantity
+- exact stock update through WooCommerce CRUD
+- quick-adjust modal with **-1 / +1 / +5 / +10**
+- exact quantity save from the modal
+- per-product **Movement Log**
+- movement user, time, previous quantity, new quantity and delta
+- latest 60 manual movement records retained
 - load-more pagination
-- stock-change logging
 
-### Advanced Create Order
-
-Order header:
+### Create Order
 
 - automatic date
-- WooCommerce order number generated on save
-
-Customer details:
-
-- Full Name
-- validated Bangladesh mobile number
-- optional email for WooCommerce status notifications
-
-Shipping details:
-
-- Full Address
+- WooCommerce-generated Order No on save
+- fixed **+88** prefix with strict 11-digit Bangladesh mobile entry
 - searchable 64-district selector
 - dependent searchable Town / City / Upazila selector
-- included Bangladesh district/upazila data map
-
-Order details:
-
-- product/SKU search
 - color-coded product availability
-- out-of-stock products cannot be added
-- serial number for each order item
-- quantity
-- optional price override
-- fixed or percentage discount
-- shipping charge
-- total
-- total in words
+- out-of-stock blocking in UI and server validation
+- SL number for every line
+- quantity and optional permitted price override
+- Discount by **৳ amount** or **%**
+- Shipping
+- Total
+- Total In Words
+- duplicate retry/idempotency protection
 
 ### Save & Share
 
-After saving a WooCommerce order, the app builds a **PNG Sales Order Slip** containing:
+After saving a WooCommerce order, the app creates a PNG Sales Order Slip containing:
 
-- order number/date
-- customer/contact/address
-- item list with SL, product image, item, quantity, rate and amount
-- subtotal
-- discount
-- shipping
-- total
-- amount in words
-- order note
+**SL | IMAGE | ITEM | QTY | RATE | AMOUNT**
 
-On supported phones **Save & Share** opens the native share sheet for WhatsApp, Messenger and other installed apps. If file sharing is unavailable, the PNG is downloaded instead.
+On supported phones, **Save & Share** opens the native file Share Sheet for WhatsApp, Messenger and other installed compatible apps. If file sharing is unavailable, the PNG downloads instead.
 
-### Shop Manager Control Center
-
-Administrator / Shop Manager users receive extra controls:
+### Shop Manager order controls
 
 - All Orders
-- Live Orders only
+- Live Orders
+- Processing Orders
+- custom WooCommerce statuses
 - customer/contact/address summary
 - item summary
-- current status
-- status update action
-- completed orders automatically disappear from Live Orders
-- 7-day sales chart
-- week total
-- sales growth vs previous week
+- status update
+- server-issued 5-minute Undo token
+- stale Undo protection if the order changes again
 
-Normal **Woo Stock & Order Staff** users do not see manager-only controls.
+### Sales & Growth
+
+For 7 / 30 / 90-day manager periods:
+- orders
+- sales
+- average order value
+- items sold
+- trend chart
+- Top Products
+- Payment Mix
+- Sales Channels
 
 ## Staff App
 
@@ -204,9 +185,9 @@ Assign the **Woo Stock & Order Staff** role from **Users → All Users**.
 
 ## QA
 
-The v1.2.1 runtime suite covers:
+The v1.3.0 runtime suite covers:
 
-- v1.1 → v1.2 upgrade
+- v1.2.1 → v1.3.0 upgrade
 - 64 Bangladesh district mapping
 - district → city/upazila map
 - BDT currency Unicode regression
@@ -214,6 +195,7 @@ The v1.2.1 runtime suite covers:
 - dashboard inventory counts
 - healthy / low / out / unmanaged product classification
 - stock update
+- quick stock adjustment and Movement Log
 - unmanaged → managed stock
 - phone validation
 - district/city validation
@@ -225,8 +207,10 @@ The v1.2.1 runtime suite covers:
 - stock reduction exactly once
 - manager All Orders
 - manager status update
+- manager status Undo
 - Live Orders filtering
-- 7-day analytics payload
+- 7/30/90-day analytics payload
+- Top Products / Payment Mix / Sales Channels
 - PWA manifest/service-worker privacy
 - canonical release ZIP structure
 
