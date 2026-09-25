@@ -133,10 +133,10 @@ class RAR_WSO_PWA {
         $is_manager = current_user_can( 'manage_woocommerce' );
         $statuses   = array();
 
-        foreach ( wc_get_order_statuses() as $key => $label ) {
+        foreach ( RAR_WSO_Data::settable_order_statuses() as $slug => $label ) {
             $statuses[] = array(
-                'value' => str_replace( 'wc-', '', $key ),
-                'label' => wp_strip_all_tags( $label ),
+                'value' => $slug,
+                'label' => $label,
             );
         }
 
@@ -160,6 +160,7 @@ class RAR_WSO_PWA {
             'swUrl'            => home_url( '/rar-wso-sw.js' ),
             'version'          => RAR_WSO_VERSION,
             'siteTimezone'     => wp_timezone_string(),
+            'tzOffset'         => wp_timezone()->getOffset( new DateTime( 'now', new DateTimeZone( 'UTC' ) ) ),
             'storeName'        => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
         );
         ?>
@@ -466,6 +467,7 @@ class RAR_WSO_PWA {
                     <input id="rar-discount-value" type="number" min="0" step="0.01" value="0">
                 </div>
             </div>
+            <div class="rar-summary-row rar-discount-amount" id="rar-discount-amount-row" hidden><span>Discount amount</span><strong id="rar-discount-amount">0</strong></div>
             <div class="rar-summary-row"><label for="rar-shipping">Shipping</label><input id="rar-shipping" type="number" min="0" step="0.01" value="<?php echo esc_attr( $settings['default_shipping'] ); ?>"></div>
             <div class="rar-summary-row total"><span>Total</span><strong id="rar-total">0</strong></div>
             <div class="rar-summary-row rar-inwords"><span>In Words</span><strong id="rar-in-words">Zero Taka Only</strong></div>

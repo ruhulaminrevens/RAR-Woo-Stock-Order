@@ -7,7 +7,9 @@ class RAR_WSO_Admin {
     public function __construct() {
         add_action( 'admin_menu', array( $this, 'menu' ), 80 );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
-        add_action( 'admin_notices', array( $this, 'maybe_flush_rewrite' ) );
+        // Flush after the staff rewrite rules are registered (init, priority 10) so /staff/
+        // works right after activation, including WP-CLI / host installer activations.
+        add_action( 'init', array( $this, 'maybe_flush_rewrite' ), 99 );
     }
 
     public function menu() {
@@ -57,7 +59,12 @@ class RAR_WSO_Admin {
         }
 
         $s = RAR_WSO_Plugin::settings();
-        $statuses = wc_get_order_statuses();
+        $statuses = array();
+        foreach ( RAR_WSO_Data::order_statuses() as $slug => $label ) {
+            if ( 'pending' !== $slug ) {
+                $statuses[ 'wc-' . $slug ] = $label;
+            }
+        }
         ?>
         <div class="wrap">
             <h1><?php esc_html_e( 'RAR Woo Stock & Order', 'rar-woo-stock-order' ); ?></h1>

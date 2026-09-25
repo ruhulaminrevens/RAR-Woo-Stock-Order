@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.3.1 — 2026-09-25
+
+### Critical fix
+- The staff app stopped at startup in v1.3.0 because of a JavaScript error (`$(...).forEach is not a function`). As a result:
+  - the dashboard stayed on "Loading…";
+  - stock Save/Quick did nothing;
+  - product search and order creation did not work;
+  - manager order lists and status changes did not work.
+
+  Fixed, and CI now has a guard for this error.
+
+### Fixed
+- Manager dashboard and order lists failed on stores that have WooCommerce refunds, because refund records were read as orders. Every query is now limited to real orders.
+- Checkout-block drafts (abandoned carts) were counted as orders and sales. They could also be chosen as a status, and WooCommerce deletes draft orders automatically. Drafts are now excluded everywhere.
+- Sales totals now leave out Pending payment orders, as WooCommerce Analytics does.
+- Refunds can no longer be made from the quick status control, because Undo could not reverse them. Refunds stay in the WooCommerce order screen.
+- Stock Set, Quick adjust and the ±buttons now use WooCommerce's atomic stock update, so a checkout that happens at the same time is never overwritten.
+- District validation uses WooCommerce state codes, so orders keep working on Bangla-translated sites.
+- The manager "Today" order list showed nothing between 6 pm and midnight because of a timezone error. Fixed.
+- `/staff/` works right after activation, including activation by WP-CLI or a host installer.
+- Turning off "Enable staff app" now blocks the app's API calls too.
+- Rejected orders no longer leave empty WooCommerce orders behind: items are checked before the order is created.
+- Product names with `&` no longer show `&amp;`.
+- The sales slip grows to fit long orders, so the totals and footer no longer overlap.
+- Expired sessions show a clear "sign in again" message instead of retrying forever.
+
+### Improved
+- The live clock uses the store timezone offset in the owner's format: `Friday । Sep 25, 2026 । 01:49:02 pm`.
+- Create Order shows the discount amount in taka when a percentage discount is used.
+- Price overrides and discounts are written to a private order note (regular price, charged price, discount, staff name).
+- The dashboard is cached for 60 seconds and refreshed right away after stock or order changes made in the app. Order reports read orders page by page.
+- The runtime tests now also cover drafts, refunds, refused refunds, translated districts and the disabled switch.
+
 ## 1.3.0 — 2026-09-25
 
 ### Finalization — Stock / Order / Manager workflows

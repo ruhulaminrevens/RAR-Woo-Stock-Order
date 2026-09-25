@@ -27,6 +27,15 @@ final class RAR_WSO_Data {
         return array_keys( self::city_map() );
     }
 
+    /**
+     * WooCommerce Bangladesh state codes for the English district names used in
+     * assets/data/bd-cities.json. Kept static so validation does not depend on
+     * translated state labels (bn_BD sites translate them).
+     */
+    private static function district_codes() {
+        return array( 'Bandarban' => 'BD-01', 'Brahmanbaria' => 'BD-04', 'Chandpur' => 'BD-09', 'Chattogram' => 'BD-10', 'Cox\'s Bazar' => 'BD-11', 'Cumilla' => 'BD-08', 'Feni' => 'BD-16', 'Khagrachhari' => 'BD-29', 'Lakshmipur' => 'BD-31', 'Noakhali' => 'BD-47', 'Rangamati' => 'BD-56', 'Dhaka' => 'BD-13', 'Faridpur' => 'BD-15', 'Gazipur' => 'BD-18', 'Gopalganj' => 'BD-17', 'Kishoreganj' => 'BD-26', 'Madaripur' => 'BD-36', 'Manikganj' => 'BD-33', 'Munshiganj' => 'BD-35', 'Narayanganj' => 'BD-40', 'Narsingdi' => 'BD-42', 'Rajbari' => 'BD-53', 'Shariatpur' => 'BD-62', 'Tangail' => 'BD-63', 'Bagerhat' => 'BD-05', 'Chuadanga' => 'BD-12', 'Jashore' => 'BD-22', 'Jhenaidah' => 'BD-23', 'Khulna' => 'BD-27', 'Kushtia' => 'BD-30', 'Magura' => 'BD-37', 'Meherpur' => 'BD-39', 'Narail' => 'BD-43', 'Satkhira' => 'BD-58', 'Bogura' => 'BD-03', 'Nawabganj' => 'BD-45', 'Joypurhat' => 'BD-24', 'Naogaon' => 'BD-48', 'Natore' => 'BD-44', 'Pabna' => 'BD-49', 'Rajshahi' => 'BD-54', 'Sirajganj' => 'BD-59', 'Barguna' => 'BD-02', 'Barishal' => 'BD-06', 'Bhola' => 'BD-07', 'Jhalokati' => 'BD-25', 'Patuakhali' => 'BD-51', 'Pirojpur' => 'BD-50', 'Jamalpur' => 'BD-21', 'Mymensingh' => 'BD-34', 'Netrakona' => 'BD-41', 'Sherpur' => 'BD-57', 'Dinajpur' => 'BD-14', 'Gaibandha' => 'BD-19', 'Kurigram' => 'BD-28', 'Lalmonirhat' => 'BD-32', 'Nilphamari' => 'BD-46', 'Panchagarh' => 'BD-52', 'Rangpur' => 'BD-55', 'Thakurgaon' => 'BD-64', 'Habiganj' => 'BD-20', 'Moulvibazar' => 'BD-38', 'Sunamganj' => 'BD-61', 'Sylhet' => 'BD-60' );
+    }
+
     public static function canonical_district( $district ) {
         $district = trim( wp_strip_all_tags( (string) $district ) );
         if ( '' === $district ) {
@@ -39,15 +48,18 @@ final class RAR_WSO_Data {
             }
         }
 
+        // A WooCommerce state code (BD-13) or a (possibly translated) WooCommerce state label.
+        $codes = array_flip( self::district_codes() );
+        $upper = strtoupper( $district );
+        if ( isset( $codes[ $upper ] ) ) {
+            return $codes[ $upper ];
+        }
+
         $states = function_exists( 'WC' ) && WC()->countries ? WC()->countries->get_states( 'BD' ) : array();
-        foreach ( $states as $label ) {
-            if ( 0 === strcasecmp( trim( wp_strip_all_tags( $label ) ), $district ) ) {
-                foreach ( self::districts() as $candidate ) {
-                    if ( 0 === strcasecmp( $candidate, trim( wp_strip_all_tags( $label ) ) ) ) {
-                        return $candidate;
-                    }
-                }
-                return trim( wp_strip_all_tags( $label ) );
+        foreach ( (array) $states as $code => $label ) {
+            $label = trim( html_entity_decode( wp_strip_all_tags( (string) $label ), ENT_QUOTES, 'UTF-8' ) );
+            if ( 0 === strcasecmp( $label, $district ) && isset( $codes[ $code ] ) ) {
+                return $codes[ $code ];
             }
         }
 
@@ -56,18 +68,9 @@ final class RAR_WSO_Data {
 
     public static function district_to_state_code( $district ) {
         $district = self::canonical_district( $district );
-        if ( '' === $district || ! function_exists( 'WC' ) || ! WC()->countries ) {
-            return '';
-        }
+        $codes    = self::district_codes();
 
-        $states = WC()->countries->get_states( 'BD' );
-        foreach ( $states as $code => $label ) {
-            if ( 0 === strcasecmp( trim( wp_strip_all_tags( $label ) ), $district ) ) {
-                return $code;
-            }
-        }
-
-        return '';
+        return ( '' !== $district && isset( $codes[ $district ] ) ) ? $codes[ $district ] : '';
     }
 
     public static function canonical_city( $district, $city ) {
@@ -90,6 +93,13 @@ final class RAR_WSO_Data {
         }
 
         return '';
+    }
+
+    /**
+     * Plain text for names shown in the app (decodes stored entities such as "&amp;" once).
+     */
+    public static function plain_text( $text ) {
+        return trim( html_entity_decode( wp_strip_all_tags( (string) $text ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
     }
 
     public static function clean_currency_symbol() {
@@ -135,8 +145,42 @@ final class RAR_WSO_Data {
         return $qty <= 10 ? 'low' : 'high';
     }
 
+    /**
+     * Statuses that are not real orders (Checkout block drafts are abandoned carts
+     * and WooCommerce deletes them automatically).
+     */
+    public static function non_order_statuses() {
+        return array( 'checkout-draft', 'trash', 'auto-draft' );
+    }
+
+    /**
+     * WooCommerce order statuses usable in the staff app (slug => label), without drafts.
+     */
+    public static function order_statuses() {
+        $out = array();
+        if ( function_exists( 'wc_get_order_statuses' ) ) {
+            foreach ( wc_get_order_statuses() as $key => $label ) {
+                $slug = str_replace( 'wc-', '', (string) $key );
+                if ( ! in_array( $slug, self::non_order_statuses(), true ) ) {
+                    $out[ $slug ] = wp_strip_all_tags( (string) $label );
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Statuses a manager may set from the quick status control. Refunds stay in
+     * WooCommerce admin (a refund creates records and emails that Undo cannot reverse).
+     */
+    public static function settable_order_statuses() {
+        $out = self::order_statuses();
+        unset( $out['refunded'] );
+        return $out;
+    }
+
     public static function live_order_status_slugs() {
-        $closed = array( 'completed', 'cancelled', 'refunded', 'failed', 'returned' );
+        $closed = array( 'completed', 'cancelled', 'refunded', 'failed', 'returned', 'checkout-draft', 'trash' );
         $all    = array();
 
         if ( function_exists( 'wc_get_order_statuses' ) ) {

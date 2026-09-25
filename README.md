@@ -7,19 +7,36 @@ Professional mobile-first WooCommerce staff PWA for **inventory control, fast or
 
 ## Current release
 
-**v1.3.0**
+**v1.3.1** — critical fix release. **Everyone on v1.3.0 should update**: in v1.3.0 a JavaScript error stopped the staff app at startup (dashboard stuck on "Loading…", stock and order actions not working).
 
 ### ⬇️ Direct plugin download
 
-[**Download RAR Woo Stock & Order v1.3.0 — Installable ZIP**](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.3.0/rar-woo-stock-order-v1.3.0.zip)
+[**Download RAR Woo Stock & Order v1.3.1 — Installable ZIP**](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/raw/main/releases/rar-woo-stock-order-v1.3.1.zip)
 
-[View v1.3.0 Release](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/tag/v1.3.0)
+Also on the Releases page, published automatically after CI passes: [v1.3.1 Release](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/tag/v1.3.1) · [All releases](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases)
 
-Upload the ZIP directly from **WordPress → Plugins → Add New → Upload Plugin**.
+**Install / update:** WordPress → Plugins → Add New → Upload Plugin → choose the ZIP → Install Now → **Replace current with uploaded** (when updating) → Activate.
 
-The release ZIP is published only after PHP, JavaScript, shell, packaging, and WordPress + WooCommerce runtime validation pass.
+Take a full site backup before updating a live store.
 
-## v1.3.0 feature set
+### What v1.3.1 fixes
+
+- The v1.3.0 startup error, which broke the dashboard, stock Save/Quick, product search, Create Order and manager order actions.
+- Manager dashboard and order lists crashing on stores that have WooCommerce refunds.
+- Checkout-block drafts counted as orders and offered as a status. Pending-payment orders no longer count as sales.
+- Refunds refused from the quick status control, since Undo cannot reverse a refund. Use the WooCommerce order screen for refunds.
+- Atomic stock updates, so a checkout at the same moment is never overwritten.
+- District validation that works on Bangla-translated sites.
+- The manager "Today" list after 6 pm.
+- `/staff/` right after activation.
+- The "Enable staff app" switch now also blocks API calls.
+- No empty orders left behind by rejected orders.
+- `&amp;` in product names.
+- Sales slip overflow on long orders.
+- The live clock in the store timezone: `Friday । Sep 25, 2026 । 01:49:02 pm`.
+- A discount amount line, and a private audit note for price overrides and discounts.
+
+## Feature set (v1.3.x)
 
 ### Role-aware operations dashboard
 
@@ -193,9 +210,11 @@ Assign the **Woo Stock & Order Staff** role from **Users → All Users**.
 
 ## QA
 
-The v1.3.0 runtime suite covers:
+The v1.3.1 runtime suite covers:
 
-- v1.2.1 → v1.3.0 upgrade
+- v1.2.1 → v1.3.1 upgrade
+- checkout drafts excluded, refund tolerance, refused quick refunds
+- translated district lookup, disabled-app API block
 - 64 Bangladesh district mapping
 - district → city/upazila map
 - BDT currency Unicode regression

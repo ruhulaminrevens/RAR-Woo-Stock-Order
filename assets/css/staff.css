@@ -225,3 +225,5 @@ body.rar-modal-open{overflow:hidden}
 .rar-stock-exact>div{grid-template-columns:1fr}.rar-modal{padding:8px}.rar-modal-card{max-height:calc(100vh - 16px);border-radius:16px;padding:13px}
 .rar-phone-field>b{padding-left:10px}
 }
+.rar-summary-row[hidden]{display:none!important}
+.rar-discount-amount strong{color:#f87171}

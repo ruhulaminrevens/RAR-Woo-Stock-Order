@@ -1,8 +1,18 @@
-# RAR Woo Stock & Order v1.3.0
+# RAR Woo Stock & Order v1.3.1
 
 **Release date:** 2026-09-25
 
-v1.3.0 expands the v1.2.1 stable baseline into a role-aware WooCommerce operations workspace while preserving the existing stock/order protections.
+**Please update from v1.3.0.** In v1.3.0 a JavaScript error stopped the staff app at startup. The dashboard stayed on "Loading…", and stock updates, product search, order creation and manager order actions did not work. v1.3.1 fixes that and also fixes:
+- dashboard crashes on stores that have refunds;
+- checkout drafts counted as orders;
+- stock updates that could overwrite each other;
+- district validation on translated sites;
+- `/staff/` returning 404 right after activation;
+- the manager "Today" list in the evening.
+
+See CHANGELOG.md for the full list.
+
+The feature set below is unchanged from v1.3.0.
 
 ## Dashboard
 
@@ -89,7 +99,9 @@ On supported mobile browsers, **Save & Share** opens the native file Share Sheet
 
 The final runtime suite covers:
 
-- upgrade to v1.3.0
+- upgrade to v1.3.1
+- checkout drafts excluded, refunds tolerated, refunds refused in quick status
+- translated-district lookup and disabled-app API block
 - role/capability preservation
 - 64 Bangladesh districts
 - custom WooCommerce statuses

@@ -90,18 +90,18 @@ PLUGIN_DIR="${WP_PATH}/wp-content/plugins/rar-woo-stock-order"
 mkdir -p "${PLUGIN_DIR}"
 rsync -a --delete   --exclude='.git'   --exclude='.github'   --exclude='tests'   --exclude='dist'   ./ "${PLUGIN_DIR}/"
 
-echo "== Seed v1.2.1 state and activate v1.3.0 =="
+echo "== Seed v1.2.1 state and activate v1.3.1 =="
 "${WP[@]}" eval 'update_option("rar_wso_version","1.2.1"); update_option("rar_wso_settings", array("enabled"=>"yes","staff_slug"=>"staff","default_order_status"=>"processing","allow_price_override"=>"yes","default_shipping"=>"0","dashboard_title"=>"Woo Stock & Order"));'
 "${WP[@]}" plugin activate rar-woo-stock-order
 
 VERSION_JSON="$("${WP[@]}" eval '$r=get_role("rar_wso_staff"); echo wp_json_encode(array("version"=>get_option("rar_wso_version"),"settings"=>get_option("rar_wso_settings"),"caps"=>$r ? $r->capabilities : array(),"shop_manager_edit_products"=>get_role("shop_manager") ? get_role("shop_manager")->has_cap("edit_products") : false));')"
-assert_jq "${VERSION_JSON}" '.version=="1.3.0"' "upgrade version migrated to 1.3.0"
+assert_jq "${VERSION_JSON}" '.version=="1.3.1"' "upgrade version migrated to 1.3.1"
 assert_jq "${VERSION_JSON}" '.caps.rar_wso_manage_stock==true and .caps.rar_wso_create_orders==true' "staff stock/order capabilities preserved"
 assert_jq "${VERSION_JSON}" '.shop_manager_edit_products==true' "Shop Manager native product editing preserved"
 
 PLUGIN_VERSION="$("${WP[@]}" plugin get rar-woo-stock-order --field=version)"
-[[ "${PLUGIN_VERSION}" == "1.3.0" ]] || fail "Expected plugin version 1.3.0, got ${PLUGIN_VERSION}"
-echo "PASS: plugin version is 1.3.0"
+[[ "${PLUGIN_VERSION}" == "1.3.1" ]] || fail "Expected plugin version 1.3.1, got ${PLUGIN_VERSION}"
+echo "PASS: plugin version is 1.3.1"
 
 echo "== Validate Bangladesh address data against WooCommerce states =="
 ADDRESS_CHECK="$("${WP[@]}" eval '$bad=array(); foreach(RAR_WSO_Data::districts() as $d){ if(!RAR_WSO_Data::district_to_state_code($d)){ $bad[]=$d; } } echo wp_json_encode(array("districts"=>count(RAR_WSO_Data::districts()),"bad"=>$bad,"dhaka_cities"=>RAR_WSO_Data::city_map()["Dhaka"]??array()));')"
@@ -153,7 +153,7 @@ echo "== Staff login and UI =="
 login_user staff 'StaffPass123!' "${STAFF_COOKIE}" /tmp/rar-wso-staff-login.html
 curl -fsS -b "${STAFF_COOKIE}" "${BASE_URL}/staff/" -o "${STAFF_HTML}"
 
-grep -q 'Secure staff workspace · v1.3.0' "${STAFF_HTML}" || fail "Staff app missing v1.3.0 marker"
+grep -q 'Secure staff workspace · v1.3.1' "${STAFF_HTML}" || fail "Staff app missing v1.3.1 marker"
 grep -q "TODAY'S DATE" "${STAFF_HTML}" || fail "v1.3 dashboard date header missing"
 grep -q 'Available / Live Stock' "${STAFF_HTML}" || fail "v1.3 inventory dashboard cards missing"
 grep -q 'data-dashboard-period="7days"' "${STAFF_HTML}" || fail "v1.3 dashboard period switch missing"
@@ -173,7 +173,7 @@ if grep -q '&#2547;' "${STAFF_HTML}" || grep -q '&amp;nbsp;' "${STAFF_HTML}"; th
 fi
 grep -q '"currency":"৳"' "${STAFF_HTML}" || fail "BDT currency symbol not localized as plain Unicode"
 grep -q '"Savar"' "${STAFF_HTML}" || fail "Bangladesh town/upazila data missing from client config"
-echo "PASS: staff UI renders v1.3.0 order and stock workflow with plain BDT currency"
+echo "PASS: staff UI renders v1.3.1 order and stock workflow with plain BDT currency"
 
 STAFF_NONCE="$(extract_nonce "${STAFF_HTML}")"
 [[ -n "${STAFF_NONCE}" ]] || fail "Could not extract staff AJAX nonce"
@@ -281,17 +281,43 @@ assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_
 MANAGER_STATS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${MANAGER_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${MANAGER_STATS}" '.success==true and .data.role=="manager" and .data.completed_orders>=1 and .data.order_control.all>=1 and .data.manager_period.key=="30days" and (.data.analytics.sales|length)==7 and (.data.analytics.week_total|type)=="number" and (.data.analytics.growth_pct|type)=="number" and (.data.recent_orders|type)=="array" and (.data.needs_attention|type)=="array" and (.data.manager_breakdowns.top_products|length)>=1 and (.data.manager_breakdowns.payment_mix|length)>=1 and (.data.manager_breakdowns.channel_mix|map(.key)|index("staff-pwa"))!=null' "v1.3 manager dashboard analytics, top products, payment and channel payload"
 
+echo "== v1.3.1 safety fixes =="
+DRAFT_ID="$("${WP[@]}" eval '$o=wc_create_order(); $o->set_status("checkout-draft"); $o->set_total(999); $o->save(); echo $o->get_id();')"
+DRAFT_LIST="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${DRAFT_LIST}" ".success==true and ([.data.orders[].id]|index(${DRAFT_ID}))==null" "checkout drafts are not listed as orders"
+grep -q '"value":"checkout-draft"' "${MANAGER_HTML}" && fail "Draft status offered in manager status control"
+grep -q '"value":"refunded"' "${MANAGER_HTML}" && fail "Refunded offered in quick status control"
+echo "PASS: draft and refunded statuses excluded from quick status control"
+
+REFUND_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_update_order_status'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode "order_id=${ORDER_ID}"   --data-urlencode 'status=refunded'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${REFUND_JSON}" '.success==false and (.data.message|test("WooCommerce order screen";"i"))' "quick status control refuses refunds"
+
+CODE_DISTRICT="$("${WP[@]}" eval 'echo wp_json_encode(array("code"=>RAR_WSO_Data::canonical_district("BD-40"),"state"=>RAR_WSO_Data::district_to_state_code("Cox'"'"'s Bazar")));')"
+assert_jq "${CODE_DISTRICT}" '.code=="Narayanganj" and .state=="BD-11"' "district lookup independent of translated state labels"
+
+"${WP[@]}" eval "wc_create_refund(array('order_id'=>${ORDER_ID},'amount'=>5,'reason'=>'runtime partial refund'));" >/dev/null
+"${WP[@]}" eval 'update_option("rar_wso_report_ver", "refund-" . microtime(true));'
+REFUND_STATS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${MANAGER_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${REFUND_STATS}" '.success==true and .data.role=="manager" and (.data.manager_breakdowns.payment_mix|length)>=1' "manager dashboard survives WooCommerce refunds"
+REFUND_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${REFUND_ORDERS}" '.success==true and ([.data.orders[] | select(.customer==null)]|length)==0' "refund records are not listed as orders"
+
+"${WP[@]}" eval '$s=get_option("rar_wso_settings"); $s["enabled"]="no"; update_option("rar_wso_settings",$s);'
+DISABLED_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${STAFF_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
+assert_jq "${DISABLED_JSON}" '.success==false and (.data.message|test("disabled";"i"))' "disabled staff app blocks API calls"
+"${WP[@]}" eval '$s=get_option("rar_wso_settings"); $s["enabled"]="yes"; update_option("rar_wso_settings",$s);'
+
 echo "== PWA endpoints and currency regression =="
 MANIFEST="$(curl -fsS "${BASE_URL}/rar-wso-manifest.webmanifest")"
 assert_jq "${MANIFEST}" '.display=="standalone" and (.start_url|contains("/staff/"))' "manifest endpoint"
 
 SERVICE_WORKER="$(curl -fsS "${BASE_URL}/rar-wso-sw.js")"
-grep -q "rar-wso-assets-1.3.0-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
+grep -q "rar-wso-assets-1.3.1-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
 grep -q "u.pathname.startsWith(STAFF_PATH)" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass authenticated staff HTML"
 grep -q "u.pathname.startsWith('/wp-admin/')" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass wp-admin"
 echo "PASS: service worker private-cache protections"
 
-JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.3.0")"
+JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.3.1")"
 if grep -q '&#2547;' <<<"${JS_BODY}" || grep -q '&nbsp;' <<<"${JS_BODY}"; then
   fail "Raw BDT HTML entities exist in shipped staff JavaScript"
 fi
@@ -302,4 +328,4 @@ grep -q "undo_order_status" <<<"${JS_BODY}" || fail "Manager status Undo client 
 grep -q "stock_adjust" <<<"${JS_BODY}" || fail "Quick stock-adjust client action missing"
 echo "PASS: BDT currency and slip-image regression guards"
 
-echo "All RAR Woo Stock & Order v1.3.0 final runtime smoke tests passed."
+echo "All RAR Woo Stock & Order v1.3.1 runtime smoke tests passed."

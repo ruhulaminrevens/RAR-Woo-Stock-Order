@@ -134,6 +134,11 @@ async function api(action,data={}){
         throw new Error('Invalid server response.');
     }
 
+    if(json===-1||json===0||response.status===403&&!json?.data?.message){
+        const err=new Error('Your staff session expired. Reload the app and sign in again.');
+        err.sessionExpired=true;
+        throw err;
+    }
     if(!response.ok||!json.success){
         throw new Error(json?.data?.message||'Request failed.');
     }
@@ -144,19 +149,17 @@ async function api(action,data={}){
 function updateClock(){
     const el=$('#rar-live-clock');
     const orderDate=$('#rar-order-date');
-    const now=new Date();
-    const tz=C.siteTimezone||undefined;
-
-    try{
-        const weekday=new Intl.DateTimeFormat('en-US',{weekday:'long',timeZone:tz}).format(now);
-        const date=new Intl.DateTimeFormat('en-US',{month:'short',day:'2-digit',year:'numeric',timeZone:tz}).format(now);
-        const time=new Intl.DateTimeFormat('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true,timeZone:tz}).format(now);
-        if(el)el.textContent=weekday+' । '+date+' । '+time;
-        if(orderDate)orderDate.textContent=date;
-    }catch(_){
-        if(el)el.textContent=now.toLocaleString();
-        if(orderDate)orderDate.textContent=now.toLocaleDateString();
-    }
+    // Store time from the WordPress timezone offset (works for "+06:00"-style timezones too).
+    const offset=Number.isFinite(Number(C.tzOffset))?Number(C.tzOffset):-(new Date().getTimezoneOffset()*60);
+    const d=new Date(Date.now()+offset*1000);
+    const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const pad=n=>String(n).padStart(2,'0');
+    const h=d.getUTCHours();
+    const date=months[d.getUTCMonth()]+' '+pad(d.getUTCDate())+', '+d.getUTCFullYear();
+    const time=pad(h%12||12)+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds())+' '+(h<12?'am':'pm');
+    if(el)el.textContent=days[d.getUTCDay()]+' । '+date+' । '+time;
+    if(orderDate)orderDate.textContent=date;
 }
 
 updateClock();
@@ -430,6 +433,10 @@ async function loadStats(showError=true){
         clearTimeout(statsRetryTimer);
         renderDashboard(data);
     }catch(error){
+        if(error&&error.sessionExpired){
+            toast(error.message);
+            return;
+        }
         if(showError)toast('Dashboard data could not load. Retrying…');
         scheduleStatsRetry();
     }
@@ -650,7 +657,7 @@ function closeStockModal(){
     activeStockProductId=0;
 }
 
-$('[data-close-stock-modal]').forEach(button=>button.addEventListener('click',closeStockModal));
+$$('[data-close-stock-modal]').forEach(button=>button.addEventListener('click',closeStockModal));
 document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&!$('#rar-stock-modal')?.hidden)closeStockModal();
 });
@@ -927,6 +934,11 @@ function totals(){
 function calculateTotals(){
     const t=totals();
     $('#rar-subtotal').textContent=money(t.subtotal);
+    const discountRow=$('#rar-discount-amount-row');
+    if(discountRow){
+        discountRow.hidden=!(t.discount>0);
+        $('#rar-discount-amount').textContent='− '+money(t.discount);
+    }
     $('#rar-total').textContent=money(t.total);
     $('#rar-in-words').textContent=amountWords(t.total);
 }
@@ -1085,7 +1097,18 @@ function loadImageSafe(src){
 }
 
 async function buildSlipFile(order,snapshot){
-    const height=Math.max(1450,1120+snapshot.items.length*82);
+    // Measure every wrapped block first so long orders never overlap the footer.
+    const mctx=document.createElement('canvas').getContext('2d');
+    mctx.font='400 24px Arial';
+    const customerText=[snapshot.name,snapshot.phone+(snapshot.email?' · '+snapshot.email:''),snapshot.address+', '+snapshot.city+', '+snapshot.district];
+    const customerLineCount=customerText.reduce((sum,text)=>sum+wrapLines(mctx,text,920).length,0);
+    mctx.font='400 23px Arial';
+    const rowsHeight=snapshot.items.reduce((sum,item)=>sum+Math.max(92,wrapLines(mctx,item.name,420).length*29+24),0);
+    mctx.font='400 22px Arial';
+    const wordLineCount=wrapLines(mctx,order.amount_words||amountWords(order.total),800).length;
+    const noteHeight=snapshot.note?Math.max(60,wrapLines(mctx,snapshot.note,820).length*30+20):0;
+    const contentEnd=245+42+customerLineCount*34+18+48+28+38+rowsHeight+10+44+4*42+70+wordLineCount*20+noteHeight;
+    const height=Math.max(1450,Math.ceil(contentEnd+190));
     const canvas=document.createElement('canvas');
     canvas.width=1080;
     canvas.height=height;
@@ -1413,8 +1436,10 @@ $('#rar-order-form')?.addEventListener('submit',async event=>{
     }
 });
 
-function statusOptions(selected){
-    return (C.orderStatuses||[]).map(status=>
+function statusOptions(selected,selectedLabel){
+    const list=C.orderStatuses||[];
+    const current=list.some(status=>status.value===selected)?'':'<option value="'+esc(selected)+'" selected disabled>'+esc(selectedLabel||selected)+'</option>';
+    return current+list.map(status=>
         '<option value="'+esc(status.value)+'" '+(status.value===selected?'selected':'')+'>'+esc(status.label)+'</option>'
     ).join('');
 }
@@ -1431,7 +1456,7 @@ function managerOrderRow(order){
             '<p>'+itemText+'</p>'+
         '</div>'+
         '<div class="rar-manager-order-actions">'+
-            '<select class="rar-order-status">'+statusOptions(order.status)+'</select>'+
+            '<select class="rar-order-status">'+statusOptions(order.status,order.status_label)+'</select>'+
             '<div class="rar-manager-status-buttons"><button type="button" class="rar-primary" data-update-status="'+order.id+'">Update Status</button>'+
             (managerUndo.has(String(order.id))?'<button type="button" class="rar-secondary rar-undo-status" data-undo-status="'+order.id+'">Undo</button>':'')+'</div>'+
         '</div>'+

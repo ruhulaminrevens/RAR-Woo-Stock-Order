@@ -5,7 +5,7 @@ Requires at least: 6.3
 Tested up to: 6.9
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,7 +13,7 @@ Professional mobile-first WooCommerce staff PWA for stock control, fast order en
 
 == Description ==
 
-RAR Woo Stock & Order v1.3.0 provides:
+RAR Woo Stock & Order v1.3.1 provides:
 
 * Professional dashboard with live date/time and daily order/sales metrics.
 * Clickable All Stock, Available/Live and Out of Stock cards.
@@ -35,7 +35,7 @@ Product add/edit/delete stays in native WooCommerce for Administrator / Shop Man
 
 == Installation ==
 
-1. Download the official installable ZIP from the GitHub Release page.
+1. Download the installable ZIP (link in the GitHub README).
 2. Upload in WordPress > Plugins > Add New > Upload Plugin.
 3. Activate RAR Woo Stock & Order.
 4. Open WooCommerce > Stock & Order.
@@ -44,6 +44,12 @@ Product add/edit/delete stays in native WooCommerce for Administrator / Shop Man
 7. Open /staff/ and optionally Add to Home Screen.
 
 == Changelog ==
+
+= 1.3.1 =
+* Critical: fixed the v1.3.0 JavaScript startup error that stopped the dashboard, stock actions, order creation and manager actions.
+* Fixed dashboard crashes on stores with refunds; checkout drafts are no longer counted or selectable.
+* Atomic stock writes, district validation on translated sites, correct evening "Today" list, and /staff/ right after activation.
+* Price-override and discount audit note, discount amount display, store-timezone clock, 60-second dashboard cache.
 
 = 1.3.0 =
 * Role-aware Staff / Shop Manager operations dashboard with Today, 7-day, monthly and manager 7/30/90-day periods.

@@ -20,8 +20,19 @@ class RAR_WSO_Ajax {
         }
     }
 
+    private function ensure_enabled() {
+        $settings = RAR_WSO_Plugin::settings();
+        if ( 'yes' !== $settings['enabled'] ) {
+            wp_send_json_error(
+                array( 'message' => __( 'The staff app is disabled in WooCommerce → Stock & Order settings.', 'rar-woo-stock-order' ) ),
+                403
+            );
+        }
+    }
+
     private function guard( $cap = 'rar_wso_access' ) {
         check_ajax_referer( 'rar_wso_nonce', 'nonce' );
+        $this->ensure_enabled();
 
         if ( ! is_user_logged_in() || ! RAR_WSO_Plugin::can( $cap ) ) {
             wp_send_json_error(
@@ -33,6 +44,7 @@ class RAR_WSO_Ajax {
 
     private function manager_guard() {
         check_ajax_referer( 'rar_wso_nonce', 'nonce' );
+        $this->ensure_enabled();
 
         if ( ! is_user_logged_in() || ! current_user_can( 'manage_woocommerce' ) ) {
             wp_send_json_error(
@@ -57,6 +69,7 @@ class RAR_WSO_Ajax {
                 $name = $parent->get_name() . ' — ' . wc_get_formatted_variation( $product, true, false, false );
             }
         }
+        $name = RAR_WSO_Data::plain_text( $name );
 
         $stock = $product->get_manage_stock() ? $product->get_stock_quantity() : null;
         $band  = RAR_WSO_Data::stock_band( $product );
@@ -84,165 +97,8 @@ class RAR_WSO_Ajax {
         );
     }
 
-    private function inventory_stats() {
-        global $wpdb;
-
-        $lookup = $wpdb->wc_product_meta_lookup;
-        $posts  = $wpdb->posts;
-
-        $sql = "
-            SELECT
-                COUNT(l.product_id) AS all_stock,
-                SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity > 0 THEN 1 ELSE 0 END) AS available_stock,
-                SUM(CASE WHEN l.stock_status='outofstock' OR (l.stock_quantity IS NOT NULL AND l.stock_quantity <= 0) THEN 1 ELSE 0 END) AS out_stock,
-                SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity >= 11 THEN 1 ELSE 0 END) AS high_stock,
-                SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity BETWEEN 1 AND 10 THEN 1 ELSE 0 END) AS low_stock,
-                SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity IS NULL THEN 1 ELSE 0 END) AS unmanaged_stock
-            FROM {$lookup} l
-            INNER JOIN {$posts} p ON p.ID=l.product_id
-            WHERE p.post_status='publish'
-              AND p.post_type IN ('product','product_variation')
-              AND NOT (
-                p.post_type='product'
-                AND EXISTS (
-                    SELECT 1
-                    FROM {$wpdb->term_relationships} tr
-                    INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id=tr.term_taxonomy_id
-                    INNER JOIN {$wpdb->terms} t ON t.term_id=tt.term_id
-                    WHERE tr.object_id=p.ID AND tt.taxonomy='product_type' AND t.slug='variable'
-                )
-              )
-        ";
-
-        $row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-        if ( ! is_array( $row ) ) {
-            $row = array();
-        }
-
-        return array(
-            'all_stock'       => (int) ( $row['all_stock'] ?? 0 ),
-            'available_stock' => (int) ( $row['available_stock'] ?? 0 ),
-            'out_stock'       => (int) ( $row['out_stock'] ?? 0 ),
-            'high_stock'      => (int) ( $row['high_stock'] ?? 0 ),
-            'low_stock'       => (int) ( $row['low_stock'] ?? 0 ),
-            'unmanaged_stock' => (int) ( $row['unmanaged_stock'] ?? 0 ),
-        );
-    }
-
     private function registered_order_status_slugs() {
-        return array_values(
-            array_map(
-                static function ( $key ) {
-                    return str_replace( 'wc-', '', (string) $key );
-                },
-                array_keys( wc_get_order_statuses() )
-            )
-        );
-    }
-
-    private function count_orders_by_status( $statuses ) {
-        $registered = $this->registered_order_status_slugs();
-
-        $statuses = array_values( array_intersect( (array) $statuses, $registered ) );
-        if ( empty( $statuses ) ) {
-            return 0;
-        }
-
-        $result = wc_get_orders(
-            array(
-                'limit'    => 1,
-                'page'     => 1,
-                'paginate' => true,
-                'return'   => 'ids',
-                'status'   => $statuses,
-            )
-        );
-
-        return is_object( $result ) && isset( $result->total ) ? (int) $result->total : 0;
-    }
-
-    private function order_metrics_today() {
-        $today  = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
-        $orders = wc_get_orders(
-            array(
-                'limit'        => -1,
-                'return'       => 'objects',
-                'date_created' => '>=' . $today . ' 00:00:00',
-                'status'       => $this->registered_order_status_slugs(),
-            )
-        );
-
-        $metrics = array(
-            'today_orders'       => count( $orders ),
-            'today_sales'        => 0.0,
-            'completed_orders'   => $this->count_orders_by_status( array( 'completed' ) ),
-            'returned_cancelled' => $this->count_orders_by_status( array( 'returned', 'cancelled', 'refunded' ) ),
-        );
-
-        foreach ( $orders as $order ) {
-            if ( ! $order->has_status( array( 'cancelled', 'failed', 'refunded', 'returned' ) ) ) {
-                $metrics['today_sales'] += (float) $order->get_total();
-            }
-        }
-
-        return $metrics;
-    }
-
-    private function manager_analytics() {
-        $tz        = wp_timezone();
-        $today     = new DateTimeImmutable( 'today', $tz );
-        $start     = $today->modify( '-13 days' );
-        $date_from = $start->format( 'Y-m-d' ) . ' 00:00:00';
-
-        $orders = wc_get_orders(
-            array(
-                'limit'        => -1,
-                'return'       => 'objects',
-                'date_created' => '>=' . $date_from,
-                'status'       => $this->registered_order_status_slugs(),
-            )
-        );
-
-        $daily = array();
-        for ( $i = 0; $i < 14; $i++ ) {
-            $key           = $start->modify( '+' . $i . ' days' )->format( 'Y-m-d' );
-            $daily[ $key ] = 0.0;
-        }
-
-        foreach ( $orders as $order ) {
-            if ( $order->has_status( array( 'cancelled', 'failed', 'refunded', 'returned' ) ) ) {
-                continue;
-            }
-
-            $created = $order->get_date_created();
-            if ( ! $created ) {
-                continue;
-            }
-
-            $key = wp_date( 'Y-m-d', $created->getTimestamp() );
-            if ( isset( $daily[ $key ] ) ) {
-                $daily[ $key ] += (float) $order->get_total();
-            }
-        }
-
-        $values        = array_values( $daily );
-        $previous      = array_sum( array_slice( $values, 0, 7 ) );
-        $current       = array_sum( array_slice( $values, 7, 7 ) );
-        $growth        = $previous > 0 ? ( ( $current - $previous ) / $previous ) * 100 : ( $current > 0 ? 100 : 0 );
-        $recent_values = array_slice( $values, 7, 7 );
-        $recent_keys   = array_slice( array_keys( $daily ), 7, 7 );
-        $labels        = array();
-
-        foreach ( $recent_keys as $key ) {
-            $labels[] = wp_date( 'D', strtotime( $key . ' 12:00:00' ) );
-        }
-
-        return array(
-            'labels'      => $labels,
-            'sales'       => array_map( 'floatval', $recent_values ),
-            'week_total'  => (float) $current,
-            'growth_pct'  => round( (float) $growth, 1 ),
-        );
+        return array_keys( RAR_WSO_Data::order_statuses() );
     }
 
     public function stats() {
@@ -251,12 +107,19 @@ class RAR_WSO_Ajax {
         $period         = isset( $_POST['period'] ) ? sanitize_key( wp_unslash( $_POST['period'] ) ) : 'today';
         $manager_period = isset( $_POST['manager_period'] ) ? sanitize_key( wp_unslash( $_POST['manager_period'] ) ) : '30days';
 
+        $is_manager = current_user_can( 'manage_woocommerce' );
+        $cache_key  = 'rar_wso_dash_' . md5( $period . '|' . $manager_period . '|' . ( $is_manager ? 'm' : 's' ) . '|' . get_current_user_id() );
+        $version    = (string) get_option( 'rar_wso_report_ver', '0' );
+        $cached     = get_transient( $cache_key );
+
+        if ( is_array( $cached ) && isset( $cached['ver'], $cached['data'] ) && $cached['ver'] === $version ) {
+            wp_send_json_success( $cached['data'] );
+        }
+
         try {
-            $data = RAR_WSO_Reports::dashboard(
-                $period,
-                $manager_period,
-                current_user_can( 'manage_woocommerce' )
-            );
+            $data = RAR_WSO_Reports::dashboard( $period, $manager_period, $is_manager );
+            // Short cache: busy stores refresh every minute without re-reading every order each time.
+            set_transient( $cache_key, array( 'ver' => $version, 'data' => $data ), MINUTE_IN_SECONDS );
         } catch ( Throwable $e ) {
             if ( function_exists( 'wc_get_logger' ) ) {
                 wc_get_logger()->error(
@@ -504,6 +367,43 @@ class RAR_WSO_Ajax {
         );
     }
 
+    /**
+     * Change stock through WooCommerce's atomic stock API (a concurrent checkout's
+     * reduction is never overwritten). Unmanaged products start being managed.
+     *
+     * @param WC_Product $product Product.
+     * @param string     $mode    'set' or 'delta'.
+     * @param mixed      $amount  Quantity or signed change.
+     * @return array [ fresh WC_Product, new quantity ]
+     */
+    private function write_stock( $product, $mode, $amount ) {
+        $id = $product->get_id();
+
+        if ( ! $product->managing_stock() ) {
+            $product->set_manage_stock( true );
+            $product->set_stock_quantity( 0 );
+            $product->save();
+            $product = wc_get_product( $id );
+        }
+
+        if ( 'set' === $mode ) {
+            $new = wc_update_product_stock( $product, max( 0, wc_stock_amount( $amount ) ), 'set' );
+        } else {
+            $delta   = wc_stock_amount( $amount );
+            $current = (float) $product->get_stock_quantity();
+            if ( $delta >= 0 ) {
+                $new = wc_update_product_stock( $product, $delta, 'increase' );
+            } elseif ( $current + $delta < 0 ) {
+                $new = wc_update_product_stock( $product, 0, 'set' );
+            } else {
+                $new = wc_update_product_stock( $product, abs( $delta ), 'decrease' );
+            }
+        }
+
+        $fresh = wc_get_product( $id );
+        return array( $fresh ? $fresh : $product, (float) $new );
+    }
+
     public function stock_update() {
         $this->guard( 'rar_wso_manage_stock' );
 
@@ -522,13 +422,8 @@ class RAR_WSO_Ajax {
             wp_send_json_error( array( 'message' => __( 'Product not found.', 'rar-woo-stock-order' ) ), 404 );
         }
 
-        $qty = max( 0, (float) $raw );
-        $old = $product->get_stock_quantity();
-
-        $product->set_manage_stock( true );
-        $product->set_stock_quantity( $qty );
-        $product->set_stock_status( $qty > 0 ? 'instock' : 'outofstock' );
-        $product->save();
+        $old = $product->managing_stock() ? $product->get_stock_quantity() : null;
+        list( $product, $qty ) = $this->write_stock( $product, 'set', $raw );
 
         $movement = $this->append_stock_movement( $id, $old, $qty, 'manual_set' );
 
@@ -574,13 +469,8 @@ class RAR_WSO_Ajax {
             wp_send_json_error( array( 'message' => __( 'Product not found.', 'rar-woo-stock-order' ) ), 404 );
         }
 
-        $old = $product->get_manage_stock() ? $product->get_stock_quantity() : null;
-        $qty = max( 0, ( is_null( $old ) ? 0.0 : (float) $old ) + $delta );
-
-        $product->set_manage_stock( true );
-        $product->set_stock_quantity( $qty );
-        $product->set_stock_status( $qty > 0 ? 'instock' : 'outofstock' );
-        $product->save();
+        $old = $product->managing_stock() ? $product->get_stock_quantity() : null;
+        list( $product, $qty ) = $this->write_stock( $product, 'delta', $delta );
 
         $movement = $this->append_stock_movement( $id, $old, $qty, 'quick_adjust' );
 
@@ -692,6 +582,44 @@ class RAR_WSO_Ajax {
             (float) apply_filters( 'rar_wso_shipping_total', $shipping, $payload, get_current_user_id() )
         );
 
+        // Validate every line before anything is written, so a rejected order never
+        // creates an empty WooCommerce order (or fires new-order integrations).
+        $lines = array();
+        foreach ( $items as $raw ) {
+            $product_id = absint( $raw['id'] ?? 0 );
+            $qty        = max( 1, absint( $raw['qty'] ?? 1 ) );
+            $product    = wc_get_product( $product_id );
+
+            if ( ! $product || ! $product->is_purchasable() || 'out' === RAR_WSO_Data::stock_band( $product ) ) {
+                wp_send_json_error(
+                    array(
+                        'message' => sprintf(
+                            /* translators: %s product name */
+                            __( '%s is not available for ordering.', 'rar-woo-stock-order' ),
+                            $product ? RAR_WSO_Data::plain_text( $product->get_name() ) : '#' . $product_id
+                        ),
+                    ),
+                    422
+                );
+            }
+
+            $stock_qty = $product->get_stock_quantity();
+            if ( $product->managing_stock() && null !== $stock_qty && $qty > (float) $stock_qty && ! $product->backorders_allowed() ) {
+                wp_send_json_error(
+                    array(
+                        'message' => sprintf(
+                            /* translators: 1: quantity 2: product name */
+                            __( 'Only %1$s unit(s) of %2$s are currently in stock.', 'rar-woo-stock-order' ),
+                            wc_format_localized_decimal( $stock_qty ),
+                            RAR_WSO_Data::plain_text( $product->get_name() )
+                        ),
+                    ),
+                    422
+                );
+            }
+            $lines[] = array( $product, $qty, $raw );
+        }
+
         try {
             $order = wc_create_order( array( 'status' => 'pending' ) );
             if ( is_wp_error( $order ) ) {
@@ -717,13 +645,13 @@ class RAR_WSO_Ajax {
             $order->set_address( $billing, 'shipping' );
 
             $items_subtotal = 0.0;
+            $audit          = array();
 
-            foreach ( $items as $raw ) {
-                $product_id = absint( $raw['id'] ?? 0 );
-                $qty        = max( 1, absint( $raw['qty'] ?? 1 ) );
-                $product    = wc_get_product( $product_id );
+            foreach ( $lines as $line ) {
+                list( $product, $qty, $raw ) = $line;
+                $product_id = $product->get_id();
 
-                if ( ! $product || ! $product->is_purchasable() || 'out' === RAR_WSO_Data::stock_band( $product ) ) {
+                if ( ! $product->is_purchasable() || 'out' === RAR_WSO_Data::stock_band( $product ) ) {
                     throw new Exception(
                         sprintf(
                             __( '%s is not available for ordering.', 'rar-woo-stock-order' ),
@@ -773,6 +701,13 @@ class RAR_WSO_Ajax {
 
                 if ( $can_override && abs( $price - $base ) > 0.0001 ) {
                     wc_add_order_item_meta( $item_id, '_rar_wso_price_override', wc_format_decimal( $price ), true );
+                    $audit[] = sprintf(
+                        '%s: %s → %s × %s',
+                        RAR_WSO_Data::plain_text( $product->get_name() ),
+                        wc_format_decimal( $base, wc_get_price_decimals() ),
+                        wc_format_decimal( $price, wc_get_price_decimals() ),
+                        $qty
+                    );
                 }
             }
 
@@ -849,8 +784,25 @@ class RAR_WSO_Ajax {
                 true
             );
 
-            $target = sanitize_key( $settings['default_order_status'] );
-            if ( ! isset( wc_get_order_statuses()[ 'wc-' . $target ] ) ) {
+            // Visible audit trail for price overrides and discounts given in the staff app.
+            if ( $audit || $discount > 0 ) {
+                $note = array();
+                if ( $audit ) {
+                    $note[] = 'Price override (regular → charged × qty): ' . implode( '; ', $audit );
+                }
+                if ( $discount > 0 ) {
+                    $note[] = sprintf(
+                        'Discount: %s%s',
+                        wc_format_decimal( $discount, wc_get_price_decimals() ),
+                        'percent' === $discount_type ? ' (' . wc_format_decimal( min( 100, $discount_value ), 2 ) . '%)' : ''
+                    );
+                }
+                $order->add_order_note( 'Staff app pricing by ' . $user->display_name . ' — ' . implode( ' · ', $note ), false, true );
+            }
+
+            $target  = sanitize_key( $settings['default_order_status'] );
+            $allowed = RAR_WSO_Data::order_statuses();
+            if ( ! isset( $allowed[ $target ] ) || 'pending' === $target ) {
                 $target = 'processing';
             }
 
@@ -867,6 +819,7 @@ class RAR_WSO_Ajax {
             }
 
             do_action( 'rar_wso_order_created', $order, $payload, get_current_user_id() );
+            RAR_WSO_Plugin::bust_reports();
 
             $this->send_order_success(
                 $order,
@@ -915,7 +868,7 @@ class RAR_WSO_Ajax {
 
         foreach ( $order->get_items() as $item ) {
             $items[] = array(
-                'name' => wp_strip_all_tags( $item->get_name() ),
+                'name' => RAR_WSO_Data::plain_text( $item->get_name() ),
                 'qty'  => (float) $item->get_quantity(),
             );
         }
@@ -943,6 +896,7 @@ class RAR_WSO_Ajax {
         $mode = isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'all';
         $page = isset( $_POST['page'] ) ? max( 1, absint( $_POST['page'] ) ) : 1;
         $args = array(
+            'type'     => 'shop_order',
             'limit'    => 30,
             'page'     => $page,
             'paginate' => true,
@@ -955,8 +909,8 @@ class RAR_WSO_Ajax {
         if ( 'live' === $mode ) {
             $args['status'] = RAR_WSO_Data::live_order_status_slugs();
         } elseif ( 'today' === $mode ) {
-            $today                = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
-            $args['date_created'] = '>=' . $today . ' 00:00:00';
+            $midnight             = new DateTimeImmutable( 'today', wp_timezone() );
+            $args['date_created'] = $midnight->getTimestamp() . '...' . time();
         } elseif ( 'processing' === $mode ) {
             $args['status'] = array( 'processing' );
         } elseif ( 'completed' === $mode ) {
@@ -993,13 +947,16 @@ class RAR_WSO_Ajax {
         $order_id = isset( $_POST['order_id'] ) ? absint( $_POST['order_id'] ) : 0;
         $status   = isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : '';
 
-        $statuses = wc_get_order_statuses();
-        if ( ! $order_id || ! isset( $statuses[ 'wc-' . $status ] ) ) {
-            wp_send_json_error( array( 'message' => __( 'Invalid order or status.', 'rar-woo-stock-order' ) ), 422 );
+        $statuses = RAR_WSO_Data::settable_order_statuses();
+        if ( ! $order_id || ! isset( $statuses[ $status ] ) ) {
+            wp_send_json_error(
+                array( 'message' => 'refunded' === $status ? __( 'Refunds must be made from the WooCommerce order screen.', 'rar-woo-stock-order' ) : __( 'Invalid order or status.', 'rar-woo-stock-order' ) ),
+                422
+            );
         }
 
         $order = wc_get_order( $order_id );
-        if ( ! $order ) {
+        if ( ! $order instanceof WC_Order || 'shop_order' !== $order->get_type() ) {
             wp_send_json_error( array( 'message' => __( 'Order not found.', 'rar-woo-stock-order' ) ), 404 );
         }
 
@@ -1034,6 +991,7 @@ class RAR_WSO_Ajax {
                 'previous_status_label' => wc_get_order_status_name( $previous_status ),
                 'current_status'        => $status,
             );
+            RAR_WSO_Plugin::bust_reports();
         }
 
         wp_send_json_success(
@@ -1069,11 +1027,11 @@ class RAR_WSO_Ajax {
 
         $current_status  = sanitize_key( $data['current_status'] ?? '' );
         $previous_status = sanitize_key( $data['previous_status'] ?? '' );
-        $statuses        = wc_get_order_statuses();
+        $statuses        = RAR_WSO_Data::order_statuses();
 
         if (
             $order->get_status() !== $current_status ||
-            ! isset( $statuses[ 'wc-' . $previous_status ] )
+            ! isset( $statuses[ $previous_status ] )
         ) {
             delete_transient( 'rar_wso_undo_' . $token );
             wp_send_json_error(
@@ -1092,6 +1050,7 @@ class RAR_WSO_Ajax {
         );
 
         delete_transient( 'rar_wso_undo_' . $token );
+        RAR_WSO_Plugin::bust_reports();
 
         wp_send_json_success(
             array(

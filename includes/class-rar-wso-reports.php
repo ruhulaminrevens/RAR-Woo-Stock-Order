@@ -19,11 +19,15 @@ final class RAR_WSO_Reports {
             }
         }
 
+        // Block-checkout drafts are abandoned carts, not orders.
+        $statuses = array_diff( $statuses, RAR_WSO_Data::non_order_statuses() );
+
         return array_values( array_unique( array_filter( $statuses ) ) );
     }
 
     private static function sales_excluded_statuses() {
-        return array( 'cancelled', 'failed', 'refunded', 'returned' );
+        // Same default as WooCommerce Analytics: unpaid (pending) and void orders are not sales.
+        return array( 'cancelled', 'failed', 'refunded', 'returned', 'pending', 'checkout-draft' );
     }
 
     private static function normalize_period( $period ) {
@@ -85,19 +89,30 @@ final class RAR_WSO_Reports {
         }
 
         if ( empty( $statuses ) ) {
-            return array();
+            return;
         }
 
-        return wc_get_orders(
-            array(
-                'limit'        => -1,
-                'return'       => 'objects',
-                'orderby'      => 'date',
-                'order'        => 'DESC',
-                'status'       => array_values( $statuses ),
-                'date_created' => self::order_date_query( $start, $end ),
-            )
-        );
+        // Page through the range (instead of limit -1) so memory is released page by page
+        // and the query works on every database backend.
+        $page = 1;
+        do {
+            $batch = wc_get_orders(
+                array(
+                    'type'     => 'shop_order',
+                    'limit'        => 250,
+                    'page'         => $page,
+                    'return'       => 'objects',
+                    'orderby'      => 'ID',
+                    'order'        => 'DESC',
+                    'status'       => array_values( $statuses ),
+                    'date_created' => self::order_date_query( $start, $end ),
+                )
+            );
+            foreach ( (array) $batch as $order ) {
+                yield $order;
+            }
+            $page++;
+        } while ( is_array( $batch ) && 250 === count( $batch ) && $page <= 400 );
     }
 
     private static function is_sales_order( $order ) {
@@ -119,7 +134,7 @@ final class RAR_WSO_Reports {
 
         $live_statuses = RAR_WSO_Data::live_order_status_slugs();
 
-        foreach ( (array) $orders as $order ) {
+        foreach ( $orders as $order ) {
             if ( ! $order instanceof WC_Order ) {
                 continue;
             }
@@ -254,6 +269,7 @@ final class RAR_WSO_Reports {
         $query = wc_get_orders(
             array_merge(
                 array(
+                    'type'     => 'shop_order',
                     'limit'    => 1,
                     'page'     => 1,
                     'paginate' => true,
@@ -446,6 +462,7 @@ final class RAR_WSO_Reports {
     private static function recent_orders( $is_manager ) {
         $orders = wc_get_orders(
             array(
+                'type'     => 'shop_order',
                 'limit'   => $is_manager ? 6 : 50,
                 'return'  => 'objects',
                 'orderby' => 'date',

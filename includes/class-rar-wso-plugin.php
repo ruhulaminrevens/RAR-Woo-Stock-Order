@@ -25,6 +25,9 @@ final class RAR_WSO_Plugin {
         new RAR_WSO_PWA();
 
         add_action( 'init', array( $this, 'maybe_upgrade' ), 5 );
+
+        // Dashboard cache is refreshed whenever the app itself changes stock or orders.
+        add_action( 'rar_wso_stock_updated', array( __CLASS__, 'bust_reports' ) );
         add_filter( 'plugin_action_links_' . plugin_basename( RAR_WSO_FILE ), array( $this, 'plugin_action_links' ) );
     }
 
@@ -119,6 +122,10 @@ final class RAR_WSO_Plugin {
             $role->remove_cap( 'rar_wso_add_products' );
             $role->remove_cap( 'rar_wso_delete_products' );
         }
+    }
+
+    public static function bust_reports() {
+        update_option( 'rar_wso_report_ver', (string) microtime( true ), false );
     }
 
     public static function can( $cap ) {
