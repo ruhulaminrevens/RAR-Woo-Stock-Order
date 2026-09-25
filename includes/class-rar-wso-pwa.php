@@ -337,6 +337,21 @@ class RAR_WSO_PWA {
             <div id="rar-sales-chart" class="rar-sales-chart rar-sales-chart-v13" aria-label="7 day sales chart"></div>
             <div class="rar-growth" id="rar-growth">—</div>
         </div>
+
+        <div class="rar-manager-breakdowns">
+            <section class="rar-v13-panel">
+                <div class="rar-panel-head"><strong>Top Products</strong><span id="rar-top-products-meta">By quantity sold</span></div>
+                <div id="rar-top-products" class="rar-breakdown-list"><div class="rar-dashboard-loading">Loading…</div></div>
+            </section>
+            <section class="rar-v13-panel">
+                <div class="rar-panel-head"><strong>Payment Mix</strong><span>Sales share</span></div>
+                <div id="rar-payment-mix" class="rar-breakdown-list"><div class="rar-dashboard-loading">Loading…</div></div>
+            </section>
+            <section class="rar-v13-panel">
+                <div class="rar-panel-head"><strong>Sales Channels</strong><span>Sales share</span></div>
+                <div id="rar-channel-mix" class="rar-breakdown-list"><div class="rar-dashboard-loading">Loading…</div></div>
+            </section>
+        </div>
     </div>
     <?php endif; ?>
 
@@ -363,7 +378,7 @@ class RAR_WSO_PWA {
 <section id="rar-stock" class="rar-view">
     <div class="rar-section-head">
         <button class="rar-back" data-view="dashboard" aria-label="Back to dashboard">←</button>
-        <div><h2>Stock Manager</h2><small>Color-coded live inventory control</small></div>
+        <div><h2>Stock Manager</h2><small>Search, filter, quick-adjust and review movement history</small></div>
     </div>
 
     <div class="rar-stock-summary">
@@ -385,6 +400,7 @@ class RAR_WSO_PWA {
         <input id="rar-stock-search" type="search" placeholder="Search item name or SKU…" autocomplete="off">
     </div>
 
+    <div class="rar-stock-helper">Tap any product card to open quick stock controls and Movement Log.</div>
     <div id="rar-stock-list" class="rar-product-list"></div>
     <button id="rar-stock-more" class="rar-secondary rar-load-more" type="button" hidden>Load more</button>
 </section>
@@ -405,7 +421,7 @@ class RAR_WSO_PWA {
             <div class="rar-card-title"><span>1</span><div><strong>Customer Details</strong><small>Who is placing this order?</small></div></div>
             <div class="rar-customer-grid">
                 <label class="wide"><span>Full Name *</span><input name="name" autocomplete="name" placeholder="Customer's full name" required></label>
-                <label><span>Contact No. *</span><input name="phone" inputmode="tel" autocomplete="tel" placeholder="+8801XXXXXXXXX" required></label>
+                <label><span>Contact No. *</span><div class="rar-phone-field"><b>+88</b><input name="phone" inputmode="numeric" autocomplete="tel" placeholder="01XXXXXXXXX" pattern="01[3-9][0-9]{8}" maxlength="11" required></div><small class="rar-field-hint">11-digit Bangladesh mobile number</small></label>
                 <label><span>Email <em>(optional)</em></span><input name="email" type="email" autocomplete="email" placeholder="For order status updates"></label>
             </div>
         </div>
@@ -440,13 +456,13 @@ class RAR_WSO_PWA {
         </div>
 
         <div class="rar-card">
-            <div class="rar-order-table-head"><span>Items</span><span id="rar-item-count">0</span></div>
+            <div class="rar-order-table-head"><span>SL · ITEM · QTY · RATE</span><span id="rar-item-count">0 item(s)</span></div>
             <div id="rar-order-items"></div>
             <div class="rar-summary-row"><span>Items subtotal</span><strong id="rar-subtotal">0</strong></div>
             <div class="rar-summary-row rar-discount-row">
                 <label for="rar-discount-value">Discount</label>
                 <div class="rar-discount-control">
-                    <select id="rar-discount-type" aria-label="Discount type"><option value="fixed">Amount</option><option value="percent">%</option></select>
+                    <select id="rar-discount-type" aria-label="Discount type"><option value="fixed">৳ Amount</option><option value="percent">% Percent</option></select>
                     <input id="rar-discount-value" type="number" min="0" step="0.01" value="0">
                 </div>
             </div>
@@ -479,6 +495,54 @@ class RAR_WSO_PWA {
 </section>
 <?php endif; ?>
 </main>
+</div>
+
+<div id="rar-stock-modal" class="rar-modal" hidden aria-hidden="true">
+    <div class="rar-modal-backdrop" data-close-stock-modal></div>
+    <section class="rar-modal-card" role="dialog" aria-modal="true" aria-labelledby="rar-stock-modal-title">
+        <header class="rar-modal-head">
+            <div>
+                <span class="rar-kicker">STOCK CONTROL</span>
+                <h2 id="rar-stock-modal-title">Adjust Stock</h2>
+            </div>
+            <button type="button" class="rar-modal-close" data-close-stock-modal aria-label="Close">×</button>
+        </header>
+
+        <div class="rar-stock-modal-product">
+            <img id="rar-stock-modal-image" src="" alt="">
+            <div>
+                <strong id="rar-stock-modal-name">—</strong>
+                <small id="rar-stock-modal-sku">—</small>
+                <span id="rar-stock-modal-band" class="rar-stock-badge">—</span>
+            </div>
+        </div>
+
+        <div class="rar-stock-current">
+            <span>Current stock</span>
+            <strong id="rar-stock-modal-current">—</strong>
+        </div>
+
+        <div class="rar-stock-quick" aria-label="Quick stock adjustment">
+            <button type="button" data-stock-delta="-1">−1</button>
+            <button type="button" data-stock-delta="1">+1</button>
+            <button type="button" data-stock-delta="5">+5</button>
+            <button type="button" data-stock-delta="10">+10</button>
+        </div>
+
+        <div class="rar-stock-exact">
+            <label for="rar-stock-modal-qty">Set exact quantity</label>
+            <div>
+                <input id="rar-stock-modal-qty" type="number" min="0" step="1" inputmode="numeric">
+                <button type="button" id="rar-stock-modal-save" class="rar-primary">Save Stock</button>
+            </div>
+        </div>
+
+        <div class="rar-movement-head">
+            <strong>Movement Log</strong>
+            <button type="button" id="rar-stock-history-refresh">Refresh</button>
+        </div>
+        <div id="rar-stock-history" class="rar-stock-history"><div class="rar-dashboard-loading">Loading…</div></div>
+    </section>
 </div>
 
 <div id="rar-toast" class="rar-toast" hidden></div>
