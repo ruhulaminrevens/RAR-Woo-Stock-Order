@@ -379,7 +379,7 @@ class RAR_WSO_PWA {
 </div>
 
 <div id="rar-toast" class="rar-toast" hidden></div>
-<script>window.RARWSO=<?php echo wp_json_encode( $config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ); ?>;</script>
+<script>window.RARWSO=<?php echo wp_json_encode( $config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ); ?>;</script>
 <script src="<?php echo esc_url( RAR_WSO_URL . 'assets/js/staff.js?ver=' . rawurlencode( RAR_WSO_VERSION ) ); ?>"></script>
 </body>
 </html>
