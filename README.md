@@ -3,26 +3,115 @@
 [![Validate plugin](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/actions/workflows/validate.yml/badge.svg)](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/actions/workflows/validate.yml)
 [![Latest release](https://img.shields.io/github/v/release/ruhulaminrevens/RAR-Woo-Stock-Order)](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/latest)
 
-Mobile-first **WooCommerce Stock Manager + Staff Order Entry PWA** for teams that mainly work from phones.
+Professional mobile-first WooCommerce staff PWA for **inventory control, fast order entry, manager order actions, sales analytics and shareable sales-order slips**.
 
-## Download
+## Current release
 
-**Recommended installable package**
+**v1.2.0**
 
-[⬇️ Download RAR Woo Stock & Order v1.1.0](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.1.0/rar-woo-stock-order-v1.1.0.zip)
+Installable ZIP:
 
-Use the release asset above for WordPress installation. It contains the canonical plugin folder:
+[Download RAR Woo Stock & Order v1.2.0](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.2.0/rar-woo-stock-order-v1.2.0.zip)
 
-`rar-woo-stock-order/`
+## What v1.2.0 adds
 
-## What this plugin is for
+### Professional dashboard
 
-RAR Woo Stock & Order intentionally focuses on two staff workflows:
+- live local date/time
+- Today's Orders
+- Today's Sales
+- Completed Orders
+- Returned / Cancelled Orders
+- All Stock
+- Available / Live Stock
+- Out of Stock
+- clickable inventory cards
+- color-coded inventory health
+- 7-day manager sales chart and growth
 
-1. **Stock Manager** — quickly search products and update stock from a phone.
-2. **Create Order** — create real WooCommerce orders for Facebook, Instagram, phone or chat sales.
+Inventory colors:
 
-Product creation, full product editing and deletion stay in the normal **WooCommerce → Products** screens for Administrator / Shop Manager users. This avoids duplicating WooCommerce catalog management inside the staff app.
+- **Green:** 11+ managed stock
+- **Orange:** 1–10 managed stock
+- **Red:** 0 / out of stock
+- **Blue:** stock quantity not managed yet
+
+### Advanced Stock Manager
+
+- item/SKU search
+- filter by All / Healthy / Low / Out / Unmanaged
+- color-highlighted product cards
+- product image, SKU, selling price, regular price, stock state and quantity
+- direct stock updates through WooCommerce CRUD
+- explicit **Set stock** action for unmanaged products
+- load-more pagination
+- stock-change logging
+
+### Advanced Create Order
+
+Order header:
+
+- automatic date
+- WooCommerce order number generated on save
+
+Customer details:
+
+- Full Name
+- validated Bangladesh mobile number
+- optional email for WooCommerce status notifications
+
+Shipping details:
+
+- Full Address
+- searchable 64-district selector
+- dependent searchable Town / City / Upazila selector
+- included Bangladesh district/upazila data map
+
+Order details:
+
+- product/SKU search
+- color-coded product availability
+- out-of-stock products cannot be added
+- serial number for each order item
+- quantity
+- optional price override
+- fixed or percentage discount
+- shipping charge
+- total
+- total in words
+
+### Save & Share
+
+After saving a WooCommerce order, the app builds a **PNG Sales Order Slip** containing:
+
+- order number/date
+- customer/contact/address
+- item list with SL, quantity, rate and amount
+- subtotal
+- discount
+- shipping
+- total
+- amount in words
+- order note
+
+On supported phones **Save & Share** opens the native share sheet for WhatsApp, Messenger and other installed apps. If file sharing is unavailable, the PNG is downloaded instead.
+
+### Shop Manager Control Center
+
+Administrator / Shop Manager users receive extra controls:
+
+- All Orders
+- Live Orders only
+- customer/contact/address summary
+- item summary
+- current status
+- status update action
+- completed orders automatically disappear from Live Orders
+- 7-day sales chart
+- week total
+- sales growth vs previous week
+
+Normal **Woo Stock & Order Staff** users do not see manager-only controls.
 
 ## Staff App
 
@@ -30,94 +119,50 @@ Default URL:
 
 `https://your-store.com/staff/`
 
-The app is private, capability-protected and marked `noindex,nofollow,noarchive`.
-
-On supported mobile browsers, use **Add to Home Screen** for an app-like PWA experience.
-
-## Dashboard
-
-- Today's Orders
-- Today's Sales
-- Low Stock
-- Out of Stock
-- Stock Manager
-- Create Order
-
-## Stock Manager
-
-- Product name / SKU search
-- Product image
-- Current price and regular price
-- Stock status and quantity
-- Protected stock updates through WooCommerce CRUD
-- Explicit **Set stock** flow for products that do not currently manage quantity
-- WooCommerce log entry for staff stock changes (`source: rar-wso`)
-
-## Create Order
-
-Customer fields:
-
-`Customer name | Phone | Email (optional) | Address | Town/City | District`
-
-Order flow:
-
-`Search item → Add → Qty → Price → Shipping → Note → Save Order`
-
-Production protections include:
-
-- Bangladesh district validation on client and server
-- Available-stock validation when backorders are disabled
-- Optional staff line-price override
-- Duplicate-order retry protection using an idempotent request key
-- WooCommerce-native order creation and stock reduction
-- Standard WooCommerce order-status and email hooks
-- Staff users do not receive WooCommerce admin links unless they already have WooCommerce management permission
+The page is private, capability-protected, marked `noindex,nofollow,noarchive`, and supports Add to Home Screen.
 
 ## Roles
 
 ### Woo Stock & Order Staff
 
-Default staff capabilities:
+Can:
 
-- Access the private staff app
-- Search/view products
-- Update stock
-- Create WooCommerce orders
-- Override order-line price when the setting is enabled
+- access staff PWA
+- search products
+- update stock
+- create WooCommerce orders
+- override order-line price when allowed
 
-The staff app does **not** provide product add/delete controls.
+Cannot manage the full catalog from this PWA.
 
 ### Administrator / Shop Manager
 
-Continue to use native WooCommerce screens for:
+In addition to the staff functions, can:
 
-- Add product
-- Edit product
-- Delete / Trash product
-- Full catalog management
+- use manager dashboard/order controls
+- update order status
+- manage products normally in WooCommerce → Products
 
-## Settings
+Product creation/edit/delete intentionally remains in native WooCommerce.
 
-Open:
+## Production safeguards
 
-**WooCommerce → Stock & Order**
+- nonce on every AJAX write
+- capability checks on every action
+- HPOS-compatible WooCommerce CRUD
+- strict Bangladesh district and city/upazila validation
+- Bangladesh phone normalization/validation
+- server-side stock validation
+- out-of-stock order blocking
+- duplicate-order retry/idempotency protection
+- discount bounded by item subtotal
+- authenticated staff HTML never cached by the service worker
+- old RAR WSO service-worker caches removed
+- plain-Unicode WooCommerce currency rendering; no raw `&#2547;` / `&nbsp;` leakage
+- order/admin links only shown to WooCommerce managers
+- operational WooCommerce data preserved on uninstall
 
-Available settings:
-
-- Enable / disable staff app
-- App title
-- Staff URL slug
-- Default new order status
-- Allow item-price override
-- Default shipping charge
-
-Assign staff users from:
-
-**Users → All Users → Role → Woo Stock & Order Staff**
-
-## Integration Hooks
-
-The plugin stays decoupled from courier, payment and workflow add-ons. Integrations can use these hooks:
+## Integration hooks
 
 - `rar_wso_shipping_total`
 - `rar_wso_payment_method`
@@ -125,76 +170,55 @@ The plugin stays decoupled from courier, payment and workflow add-ons. Integrati
 - `rar_wso_order_created`
 - `rar_wso_stock_updated`
 
-This keeps RAR Woo Stock & Order focused while allowing other WooCommerce plugins to extend shipping, payment and order workflow behavior.
+These keep the plugin compatible with separate courier, payment and workflow plugins without duplicating their internal logic.
 
-## Security & Data Safety
+## Settings
 
-- WordPress nonce on every AJAX request
-- Capability check on every staff action
-- No public inventory/order write endpoint
-- WooCommerce CRUD APIs instead of direct order-table writes
-- HPOS compatibility declared
-- Existing WooCommerce products and orders remain the source of truth
-- Authenticated `/staff/` HTML and `wp-admin` requests are not cached by the service worker
-- Service worker caches only safe static app assets
-- Old RAR WSO caches are removed during service-worker activation
-- Uninstall preserves WooCommerce product/order data and plugin operational history
+Open **WooCommerce → Stock & Order**:
 
-## Upgrade from v1.0.0
+- Enable staff app
+- App title
+- Staff URL slug
+- Default new order status
+- Optional line-price override
+- Default shipping charge
 
-Some v1.0.0 installations were installed directly from a GitHub source archive, which created a versioned directory such as:
-
-`RAR-Woo-Stock-Order-1.0.0/`
-
-The official v1.1.0 release uses the canonical folder:
-
-`rar-woo-stock-order/`
-
-For those older installs, use this one-time migration:
-
-1. Back up the site.
-2. Deactivate **RAR Woo Stock & Order v1.0.0**.
-3. Delete the old plugin files from **Plugins**. The plugin deliberately preserves settings and WooCommerce operational data.
-4. Upload the official `rar-woo-stock-order-v1.1.0.zip` release asset.
-5. Activate the plugin.
-6. Open **WooCommerce → Stock & Order** and verify the staff URL.
-7. Test `/staff/` once on desktop and phone.
-
-After this migration, keep the canonical plugin folder for future updates.
+Assign the **Woo Stock & Order Staff** role from **Users → All Users**.
 
 ## Compatibility
 
 - WordPress 6.3+
 - PHP 7.4+
 - WooCommerce 8.0+
-- WooCommerce HPOS supported
-- Tested in CI with a real WordPress + WooCommerce runtime on PHP 8.2
+- HPOS supported
+- CI runtime tested with WordPress + WooCommerce on PHP 8.2
 
-## Quality Assurance
+## QA
 
-Every release branch is checked with GitHub Actions for:
+The v1.2 runtime suite covers:
 
-- PHP syntax
-- JavaScript syntax
-- Shell test syntax
-- v1.0 → v1.1 migration behavior
-- Staff role/capability migration
-- Shop Manager product-edit capability preservation
-- Logged-out and authenticated `/staff/` rendering
-- Product/SKU search
-- Managed and unmanaged stock updates
-- Invalid district rejection
-- Stock-limit rejection
-- Real WooCommerce order creation
-- Duplicate-order retry protection
-- Order metadata
-- Numeric dashboard sales data
-- PWA manifest
-- Private-safe service-worker behavior
-- Release ZIP structure
-
-## Current Stable
-
-**v1.1.0**
+- v1.1 → v1.2 upgrade
+- 64 Bangladesh district mapping
+- district → city/upazila map
+- BDT currency Unicode regression
+- staff vs manager UI separation
+- dashboard inventory counts
+- healthy / low / out / unmanaged product classification
+- stock update
+- unmanaged → managed stock
+- phone validation
+- district/city validation
+- out-of-stock order rejection
+- fixed discount order calculation
+- shipping
+- total in words
+- duplicate-order retry
+- stock reduction exactly once
+- manager All Orders
+- manager status update
+- Live Orders filtering
+- 7-day analytics payload
+- PWA manifest/service-worker privacy
+- canonical release ZIP structure
 
 See [CHANGELOG.md](CHANGELOG.md) and [RELEASE_NOTES.md](RELEASE_NOTES.md).
