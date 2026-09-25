@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0 — Unreleased
+
+### Checkpoint 1 — Dashboard/API foundation
+- Added a dedicated read-only reporting service for dashboard metrics, inventory health, recent orders, attention items and manager summaries.
+- Added period-aware dashboard APIs for Today, 7 days and This month.
+- Added manager reporting periods for 7, 30 and 90 days.
+- Added role-aware dashboard payloads so Staff and Shop Manager receive only the data/actions intended for their role.
+- Added managed-stock semantics: Available / Live counts only positive managed quantities; unmanaged stock remains separately visible as Not tracked.
+- Added units-in-hand and estimated stock-value metrics from WooCommerce product lookup data.
+- Added manager Order Control counts for All Orders, Live Orders and Processing.
+- Added manager Processing order drilldown.
+- Added recent-order and Needs Attention dashboard feeds.
+- Added 7-day sales/order trend data for lightweight charts.
+- Redesigned the dashboard into a responsive dark operations workspace inspired by the approved prototype while preserving the existing Stock Manager and Create Order workflows.
+- Added Staff-only simplified dashboard and Shop Manager-only Order Control / Sales & Growth sections.
+- Fixed manager dashboard action binding so every `data-orders-mode` button is interactive.
+- Preserved the v1.2.1 custom WooCommerce status normalization and resilient dashboard error handling.
+- Expanded runtime tests for Staff/Manager role separation, period metrics, manager Processing drilldown and the new dashboard payload.
+
 ## 1.2.1 — 2026-09-25
 
 ### Dashboard / Manager Fixes
