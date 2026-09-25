@@ -6,6 +6,7 @@ on:
       - main
       - hotfix/v1.2.1
       - release/v1.3.0
+      - release/v1.3.1
   pull_request:
 
 jobs:
@@ -21,6 +22,14 @@ jobs:
       - name: JavaScript syntax
         run: node --check assets/js/staff.js
 
+      - name: JavaScript single-element forEach guard
+        run: |
+          # $() returns one element; calling forEach on it crashed the v1.3.0 app at startup.
+          if grep -nE "(^|[^$])\$\('[^']*'\)\.forEach" assets/js/staff.js; then
+            echo "::error::Use \$\$() (NodeList) before forEach."
+            exit 1
+          fi
+
       - name: Shell syntax
         run: bash -n tests/runtime-smoke.sh
 
@@ -33,10 +42,10 @@ jobs:
       - name: Validate release metadata
         run: |
           VERSION=$(sed -n 's/^ \* Version: \(.*\)$/\1/p' rar-woo-stock-order.php | head -1)
-          test "$VERSION" = "1.3.0"
-          grep -q '^Stable tag: 1.3.0$' readme.txt
-          grep -q '^## 1.3.0 — 2026-09-25$' CHANGELOG.md
-          grep -q '^# RAR Woo Stock & Order v1.3.0$' RELEASE_NOTES.md
+          test "$VERSION" = "1.3.1"
+          grep -q '^Stable tag: 1.3.1$' readme.txt
+          grep -q '^## 1.3.1 — 2026-09-25$' CHANGELOG.md
+          grep -q '^# RAR Woo Stock & Order v1.3.1$' RELEASE_NOTES.md
 
       - name: Build canonical installable ZIP
         run: |
@@ -49,12 +58,14 @@ jobs:
             --exclude='.github' \
             --exclude='tests' \
             --exclude='dist' \
+            --exclude='releases' \
+            --exclude='docs' \
             ./ "dist/$ROOT/"
           (cd dist && zip -qr "rar-woo-stock-order-v$VERSION.zip" "$ROOT")
           unzip -t "dist/rar-woo-stock-order-v$VERSION.zip"
           unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -q "rar-woo-stock-order/rar-woo-stock-order.php"
           unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -q "rar-woo-stock-order/assets/data/bd-cities.json"
-          if unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -Eq "rar-woo-stock-order/(\.github|tests)/"; then
+          if unzip -l "dist/rar-woo-stock-order-v$VERSION.zip" | grep -Eq "rar-woo-stock-order/(\.github|tests|releases|docs)/"; then
             echo "Development-only files leaked into release ZIP."
             exit 1
           fi
@@ -119,6 +130,8 @@ jobs:
             --exclude='.github' \
             --exclude='tests' \
             --exclude='dist' \
+            --exclude='releases' \
+            --exclude='docs' \
             ./ "dist/$ROOT/"
           (cd dist && zip -qr "rar-woo-stock-order-v$VERSION.zip" "$ROOT")
           unzip -t "dist/rar-woo-stock-order-v$VERSION.zip"
