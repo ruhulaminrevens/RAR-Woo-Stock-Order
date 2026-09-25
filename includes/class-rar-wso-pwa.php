@@ -372,7 +372,7 @@ class RAR_WSO_PWA {
     </section>
 
     <div class="rar-install-tip rar-install-tip-dark"><strong>Phone tip:</strong> Chrome → Add to Home Screen to use this like an app.</div>
-    <div class="rar-app-meta">Secure staff workspace · v<?php echo esc_html( RAR_WSO_VERSION ); ?> · v1.3 dashboard preview</div>
+    <div class="rar-app-meta">Secure staff workspace · v<?php echo esc_html( RAR_WSO_VERSION ); ?> · operations workspace</div>
 </section>
 
 <section id="rar-stock" class="rar-view">
