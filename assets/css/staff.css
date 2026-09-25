@@ -179,3 +179,49 @@ body.rar-dashboard-active .rar-app{padding:0 10px 28px}
 .rar-mini-bars{gap:4px}.rar-mini-bar .value{display:none}
 .rar-recent-order{grid-template-columns:1fr}.rar-recent-total{text-align:left}.rar-status-pill{grid-column:auto}
 }
+
+
+/* ===== v1.3 final stock/order/manager controls ===== */
+.rar-stock-helper{margin:0 0 10px;color:var(--m);font-size:.68rem}
+.rar-stock-row-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.rar-stock-control .rar-stock-open{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
+.rar-phone-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;border:1px solid var(--b);border-radius:12px;background:#fff;overflow:hidden}
+.rar-phone-field:focus-within{border-color:#74b7a6;box-shadow:0 0 0 3px rgba(15,123,99,.08)}
+.rar-phone-field>b{padding:12px 0 12px 13px;color:#374151;font-size:.86rem}
+.rar-card .rar-phone-field input{border:0!important;border-radius:0;box-shadow:none!important;padding-left:4px}
+.rar-field-hint{display:block;color:var(--m);font-size:.62rem;margin-top:4px}
+.rar-manager-status-buttons{display:flex;gap:6px;align-items:center}.rar-manager-status-buttons .rar-secondary{padding:8px 10px;font-size:.7rem}
+.rar-undo-status{border-color:#f5c2c7!important;background:#fff7f7!important;color:#a61b29!important}
+
+.rar-manager-breakdowns{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;margin-top:10px}
+.rar-breakdown-list{display:grid;gap:7px;margin-top:9px}
+.rar-breakdown-row{display:grid;grid-template-columns:25px minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid #263753;border-radius:9px;background:#111d32;padding:8px}
+.rar-breakdown-row>b{display:grid;place-items:center;width:25px;height:25px;border-radius:7px;background:#203252;color:#a5b4fc;font-size:.55rem}
+.rar-breakdown-row strong,.rar-breakdown-row small{display:block}.rar-breakdown-row strong{font-size:.56rem;color:#f8fafc}.rar-breakdown-row small{font-size:.46rem;color:#8192aa;margin-top:2px}.rar-breakdown-row>em{font-style:normal;color:#cbd5e1;font-size:.52rem;white-space:nowrap}
+.rar-mix-row{display:grid;grid-template-columns:1fr auto;gap:5px 8px;align-items:center;border-bottom:1px solid #22314b;padding:7px 0}.rar-mix-row:last-child{border-bottom:0}.rar-mix-row>div:first-child{display:grid;grid-template-columns:1fr auto;gap:3px 8px}.rar-mix-row strong{font-size:.55rem;color:#f8fafc}.rar-mix-row span{grid-column:1;color:#7f91aa;font-size:.45rem}.rar-mix-row em{grid-column:2;grid-row:1/3;align-self:center;color:#cbd5e1;font-size:.5rem;font-style:normal}.rar-mix-track{grid-column:1;height:5px;border-radius:999px;background:#263650;overflow:hidden}.rar-mix-track i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2dd4bf,#818cf8)}.rar-mix-row>small{font-size:.46rem;color:#91a2ba}
+
+body.rar-modal-open{overflow:hidden}
+.rar-modal[hidden]{display:none}.rar-modal{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:18px}
+.rar-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.68);backdrop-filter:blur(3px)}
+.rar-modal-card{position:relative;z-index:1;width:min(560px,100%);max-height:min(820px,calc(100vh - 30px));overflow:auto;background:#fff;border:1px solid #dfe6e9;border-radius:20px;padding:16px;box-shadow:0 25px 70px rgba(15,23,42,.3)}
+.rar-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid #edf1f3;padding-bottom:12px}.rar-modal-head h2{margin:3px 0 0;font-size:1.12rem}.rar-modal-close{border:0;background:#f1f5f9;color:#334155;width:34px;height:34px;border-radius:10px;font-size:1.35rem;cursor:pointer}
+.rar-stock-modal-product{display:grid;grid-template-columns:66px 1fr;gap:12px;align-items:center;padding:14px 0}.rar-stock-modal-product img{width:66px;height:66px;object-fit:contain;border:1px solid #e5e7eb;border-radius:12px;background:#fff}.rar-stock-modal-product strong,.rar-stock-modal-product small{display:block}.rar-stock-modal-product strong{font-size:.9rem}.rar-stock-modal-product small{font-size:.65rem;color:var(--m);margin:4px 0 6px}
+.rar-stock-current{display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border:1px solid #e5e7eb;border-radius:13px;padding:12px}.rar-stock-current span{font-size:.72rem;color:var(--m)}.rar-stock-current strong{font-size:1.15rem}
+.rar-stock-quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:11px 0}.rar-stock-quick button{border:1px solid #cbd5e1;background:#fff;border-radius:11px;padding:11px 8px;font-weight:850;cursor:pointer}.rar-stock-quick button:hover{background:#f8fafc}.rar-stock-quick button:disabled{opacity:.55}
+.rar-stock-exact{border-top:1px solid #edf1f3;padding-top:12px}.rar-stock-exact>label{display:block;font-size:.7rem;font-weight:750;margin-bottom:6px}.rar-stock-exact>div{display:grid;grid-template-columns:1fr auto;gap:8px}.rar-stock-exact input{width:100%;border:1px solid var(--b);border-radius:11px;padding:11px}
+.rar-movement-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px;padding-top:13px;border-top:1px solid #edf1f3}.rar-movement-head strong{font-size:.8rem}.rar-movement-head button{border:0;background:transparent;color:var(--g);font-size:.65rem;font-weight:800;cursor:pointer}
+.rar-stock-history{display:grid;gap:7px;margin-top:8px}.rar-movement-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid #e5e7eb;border-radius:10px;padding:9px;background:#fbfdfe}.rar-movement-row strong,.rar-movement-row small{display:block}.rar-movement-row strong{font-size:.68rem}.rar-movement-row small{font-size:.56rem;color:var(--m);margin-top:2px}.rar-movement-values{text-align:right}.rar-movement-values span,.rar-movement-values b{display:block}.rar-movement-values span{font-size:.58rem;color:#475569}.rar-movement-values b{font-size:.65rem;margin-top:2px}.rar-movement-values b.up{color:#15803d}.rar-movement-values b.down{color:#b42318}
+
+@media(max-width:900px){
+.rar-manager-breakdowns{grid-template-columns:1fr 1fr}.rar-manager-breakdowns>section:first-child{grid-column:1/-1}
+}
+@media(max-width:700px){
+.rar-product-row{grid-template-columns:50px minmax(0,1fr) 94px}.rar-stock-control input{width:84px}.rar-stock-control button{width:auto}
+.rar-manager-breakdowns{grid-template-columns:1fr}.rar-manager-breakdowns>section:first-child{grid-column:auto}
+.rar-manager-order-actions{grid-template-columns:1fr}.rar-manager-status-buttons{justify-content:flex-end}
+}
+@media(max-width:480px){
+.rar-stock-quick{grid-template-columns:repeat(2,1fr)}
+.rar-stock-exact>div{grid-template-columns:1fr}.rar-modal{padding:8px}.rar-modal-card{max-height:calc(100vh - 16px);border-radius:16px;padding:13px}
+.rar-phone-field>b{padding-left:10px}
+}
