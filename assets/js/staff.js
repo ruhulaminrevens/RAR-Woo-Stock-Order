@@ -19,6 +19,7 @@ let managerOrders=[];
 let managerPage=1;
 let managerHasMore=false;
 let lastSlipUrl='';
+let statsRetryTimer=null;
 
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'
@@ -187,7 +188,19 @@ function renderAnalytics(data){
     }
 
     if(chart){
+        if(data.warning){
+            chart.innerHTML='<div class="rar-chart-message">'+esc(data.warning)+'</div>';
+            return;
+        }
+
         const values=(data.sales||[]).map(Number);
+        const hasSales=values.some(value=>value>0);
+
+        if(!hasSales){
+            chart.innerHTML='<div class="rar-chart-message">No active sales in the last 7 days.</div>';
+            return;
+        }
+
         const max=Math.max(1,...values);
         chart.innerHTML=values.map((value,i)=>{
             const height=Math.max(4,(value/max)*100);
@@ -200,26 +213,40 @@ function renderAnalytics(data){
     }
 }
 
-async function loadStats(){
+function scheduleStatsRetry(){
+    clearTimeout(statsRetryTimer);
+    statsRetryTimer=setTimeout(()=>{
+        if(!document.hidden)loadStats(false);
+    },5000);
+}
+
+async function loadStats(showError=true){
     try{
         const data=await api('stats');
-        $('#stat-orders').textContent=data.today_orders;
-        $('#stat-sales').textContent=money(data.today_sales);
-        $('#stat-completed').textContent=data.completed_orders;
-        $('#stat-returned').textContent=data.returned_cancelled;
-        $('#stat-all-stock').textContent=data.all_stock;
-        $('#stat-available').textContent=data.available_stock;
-        $('#stat-out').textContent=data.out_stock;
+        clearTimeout(statsRetryTimer);
 
-        $('#stock-count-all').textContent=data.all_stock;
-        $('#stock-count-high').textContent=data.high_stock;
-        $('#stock-count-low').textContent=data.low_stock;
-        $('#stock-count-out').textContent=data.out_stock;
-        $('#stock-count-unmanaged').textContent=data.unmanaged_stock;
+        $('#stat-orders').textContent=Number(data.today_orders||0);
+        $('#stat-sales').textContent=money(data.today_sales||0);
+        $('#stat-completed').textContent=Number(data.completed_orders||0);
+        $('#stat-returned').textContent=Number(data.returned_cancelled||0);
+        $('#stat-all-stock').textContent=Number(data.all_stock||0);
+        $('#stat-available').textContent=Number(data.available_stock||0);
+        $('#stat-out').textContent=Number(data.out_stock||0);
+
+        $('#stock-count-all').textContent=Number(data.all_stock||0);
+        $('#stock-count-high').textContent=Number(data.high_stock||0);
+        $('#stock-count-low').textContent=Number(data.low_stock||0);
+        $('#stock-count-out').textContent=Number(data.out_stock||0);
+        $('#stock-count-unmanaged').textContent=Number(data.unmanaged_stock||0);
 
         renderAnalytics(data.analytics);
+
+        if(data.stats_warning&&showError){
+            toast(data.stats_warning);
+        }
     }catch(error){
-        toast(error.message);
+        if(showError)toast('Dashboard data could not load. Retrying…');
+        scheduleStatsRetry();
     }
 }
 
@@ -438,6 +465,7 @@ $('#rar-order-search-results')?.addEventListener('click',event=>{
             id:product.id,
             name:product.name,
             sku:product.sku,
+            image:product.image||'',
             qty:1,
             price:Number(product.price),
             maxStock,
@@ -658,6 +686,34 @@ function canvasBlob(canvas){
     });
 }
 
+function loadImageSafe(src){
+    return new Promise(resolve=>{
+        if(!src){
+            resolve(null);
+            return;
+        }
+
+        let settled=false;
+        const img=new Image();
+        const finish=value=>{
+            if(settled)return;
+            settled=true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+
+        try{
+            const u=new URL(src,window.location.href);
+            if(u.origin!==window.location.origin)img.crossOrigin='anonymous';
+        }catch(_){}
+
+        img.onload=()=>finish(img);
+        img.onerror=()=>finish(null);
+        const timer=setTimeout(()=>finish(null),3500);
+        img.src=src;
+    });
+}
+
 async function buildSlipFile(order,snapshot){
     const height=Math.max(1450,1120+snapshot.items.length*82);
     const canvas=document.createElement('canvas');
@@ -712,7 +768,8 @@ async function buildSlipFile(order,snapshot){
 
     ctx.font='700 25px Arial';
     ctx.fillText('SL',70,y);
-    ctx.fillText('ITEM',130,y);
+    ctx.fillText('IMAGE',125,y);
+    ctx.fillText('ITEM',235,y);
     ctx.textAlign='center';ctx.fillText('QTY',720,y);
     ctx.textAlign='right';ctx.fillText('RATE',875,y);ctx.fillText('AMOUNT',1010,y);
     ctx.textAlign='left';
@@ -720,19 +777,56 @@ async function buildSlipFile(order,snapshot){
 
     ctx.strokeStyle='#dfe6e9';
     ctx.beginPath();ctx.moveTo(70,y);ctx.lineTo(1010,y);ctx.stroke();
-    y+=36;
+    y+=38;
 
+    const slipImages=await Promise.all(snapshot.items.map(item=>loadImageSafe(item.image||'')));
     ctx.font='400 23px Arial';
-    snapshot.items.forEach((item,index)=>{
-        const lines=wrapLines(ctx,item.name,500);
-        ctx.fillText(String(index+1),78,y);
-        lines.forEach((line,lineIndex)=>ctx.fillText(line,130,y+lineIndex*29));
-        ctx.textAlign='center';ctx.fillText(String(item.qty),720,y);
-        ctx.textAlign='right';ctx.fillText(money(item.price),875,y);
-        ctx.fillText(money(item.price*item.qty),1010,y);
+
+    for(let index=0;index<snapshot.items.length;index++){
+        const item=snapshot.items[index];
+        const image=slipImages[index];
+        const rowTop=y-20;
+        const imageSize=72;
+        const lines=wrapLines(ctx,item.name,420);
+        const rowHeight=Math.max(92,lines.length*29+24);
+
+        ctx.fillStyle='#111827';
+        ctx.fillText(String(index+1),78,y+16);
+
+        ctx.fillStyle='#f8fafc';
+        ctx.fillRect(125,rowTop,imageSize,imageSize);
+        ctx.strokeStyle='#e5e7eb';
+        ctx.strokeRect(125,rowTop,imageSize,imageSize);
+
+        if(image){
+            const scale=Math.min(imageSize/image.naturalWidth,imageSize/image.naturalHeight);
+            const drawW=Math.max(1,image.naturalWidth*scale);
+            const drawH=Math.max(1,image.naturalHeight*scale);
+            const drawX=125+(imageSize-drawW)/2;
+            const drawY=rowTop+(imageSize-drawH)/2;
+            ctx.drawImage(image,drawX,drawY,drawW,drawH);
+        }else{
+            ctx.fillStyle='#94a3b8';
+            ctx.font='700 15px Arial';
+            ctx.textAlign='center';
+            ctx.fillText('IMG',125+imageSize/2,rowTop+42);
+            ctx.textAlign='left';
+            ctx.font='400 23px Arial';
+        }
+
+        ctx.fillStyle='#111827';
+        lines.forEach((line,lineIndex)=>ctx.fillText(line,235,y+lineIndex*29));
+
+        ctx.textAlign='center';
+        ctx.fillText(String(item.qty),720,y+16);
+
+        ctx.textAlign='right';
+        ctx.fillText(money(item.price),875,y+16);
+        ctx.fillText(money(item.price*item.qty),1010,y+16);
         ctx.textAlign='left';
-        y+=Math.max(58,lines.length*29+20);
-    });
+
+        y+=rowHeight;
+    }
 
     y+=10;
     ctx.strokeStyle='#dfe6e9';
@@ -1090,4 +1184,16 @@ if('serviceWorker' in navigator){
 
 calculateTotals();
 loadStats();
+
+setInterval(()=>{
+    if(!document.hidden&&$('#rar-dashboard')?.classList.contains('active')){
+        loadStats(false);
+    }
+},60000);
+
+document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&$('#rar-dashboard')?.classList.contains('active')){
+        loadStats(false);
+    }
+});
 })();
