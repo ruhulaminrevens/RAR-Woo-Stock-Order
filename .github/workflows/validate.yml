@@ -92,3 +92,52 @@ jobs:
           WP_PATH: /tmp/rar-wso-wp
           BASE_URL: http://127.0.0.1:8080
         run: bash tests/runtime-smoke.sh
+
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - syntax
+      - package
+      - runtime
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build canonical release ZIP
+        run: |
+          VERSION=$(sed -n 's/^ \* Version: \(.*\)$/\1/p' rar-woo-stock-order.php | head -1)
+          ROOT=rar-woo-stock-order
+          rm -rf dist
+          mkdir -p "dist/$ROOT"
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='tests' \
+            --exclude='dist' \
+            ./ "dist/$ROOT/"
+          (cd dist && zip -qr "rar-woo-stock-order-v$VERSION.zip" "$ROOT")
+          unzip -t "dist/rar-woo-stock-order-v$VERSION.zip"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VERSION"
+          ASSET="dist/rar-woo-stock-order-v$VERSION.zip"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; leaving published asset unchanged."
+            exit 0
+          fi
+
+          gh release create "$TAG" "$ASSET" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "RAR Woo Stock & Order $TAG" \
+            --notes-file RELEASE_NOTES.md
