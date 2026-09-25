@@ -143,13 +143,13 @@ STATS_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_s
 assert_jq "${STATS_JSON}" '.success==true and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard inventory metrics"
 
 HIGH_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARHIGH001'   --data-urlencode 'filter=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band=="high" and .data.items[0].can_add==true" "healthy stock product classification"
+assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true" "healthy stock product classification"
 
 LOW_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARLOW001'   --data-urlencode 'filter=low'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${LOW_JSON}" ".success==true and .data.items[0].id==${LOW_ID} and .data.items[0].stock_band=="low"" "low stock product classification"
+assert_jq "${LOW_JSON}" ".success==true and .data.items[0].id==${LOW_ID} and .data.items[0].stock_band==\"low\"" "low stock product classification"
 
 OUT_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RAROUT001'   --data-urlencode 'filter=out'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${OUT_JSON}" ".success==true and .data.items[0].id==${OUT_ID} and .data.items[0].stock_band=="out" and .data.items[0].can_add==false" "out-of-stock product cannot be added"
+assert_jq "${OUT_JSON}" ".success==true and .data.items[0].id==${OUT_ID} and .data.items[0].stock_band==\"out\" and .data.items[0].can_add==false" "out-of-stock product cannot be added"
 
 echo "== Stock update =="
 STOCK_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_stock_update'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode "product_id=${LOW_ID}"   --data-urlencode 'qty=8'   "${BASE_URL}/wp-admin/admin-ajax.php")"
