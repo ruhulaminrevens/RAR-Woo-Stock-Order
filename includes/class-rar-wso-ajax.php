@@ -90,14 +90,25 @@ class RAR_WSO_Ajax {
         $sql = "
             SELECT
                 COUNT(l.product_id) AS all_stock,
-                SUM(CASE WHEN l.stock_status='instock' THEN 1 ELSE 0 END) AS available_stock,
+                SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity > 0 THEN 1 ELSE 0 END) AS available_stock,
                 SUM(CASE WHEN l.stock_status='outofstock' OR (l.stock_quantity IS NOT NULL AND l.stock_quantity <= 0) THEN 1 ELSE 0 END) AS out_stock,
                 SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity >= 11 THEN 1 ELSE 0 END) AS high_stock,
                 SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity BETWEEN 1 AND 10 THEN 1 ELSE 0 END) AS low_stock,
                 SUM(CASE WHEN l.stock_status='instock' AND l.stock_quantity IS NULL THEN 1 ELSE 0 END) AS unmanaged_stock
             FROM {$lookup} l
             INNER JOIN {$posts} p ON p.ID=l.product_id
-            WHERE p.post_status='publish' AND p.post_type IN ('product','product_variation')
+            WHERE p.post_status='publish'
+              AND p.post_type IN ('product','product_variation')
+              AND NOT (
+                p.post_type='product'
+                AND EXISTS (
+                    SELECT 1
+                    FROM {$wpdb->term_relationships} tr
+                    INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id=tr.term_taxonomy_id
+                    INNER JOIN {$wpdb->terms} t ON t.term_id=tt.term_id
+                    WHERE tr.object_id=p.ID AND tt.taxonomy='product_type' AND t.slug='variable'
+                )
+              )
         ";
 
         $row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -226,7 +237,7 @@ class RAR_WSO_Ajax {
 
         switch ( $filter ) {
             case 'available':
-                return 'out' !== $band;
+                return in_array( $band, array( 'high', 'low' ), true );
             case 'out':
                 return 'out' === $band;
             case 'high':
