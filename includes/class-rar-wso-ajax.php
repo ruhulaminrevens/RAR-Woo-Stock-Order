@@ -289,8 +289,7 @@ class RAR_WSO_Ajax {
             $products = wc_get_products(
                 array(
                     'status'  => 'publish',
-                    'limit'   => 120,
-                    'page'    => max( 1, (int) ceil( $page / 2 ) ),
+                    'limit'   => max( 120, $page * $limit * 2 ),
                     'orderby' => 'name',
                     'order'   => 'ASC',
                     'return'  => 'objects',
