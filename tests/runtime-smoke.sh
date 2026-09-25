@@ -55,22 +55,53 @@ echo "== Install WooCommerce =="
 "${WP[@]}" option update woocommerce_currency_pos right_space
 "${WP[@]}" option update woocommerce_price_num_decimals 2
 
+echo "== Register live-like custom WooCommerce order statuses =="
+mkdir -p "${WP_PATH}/wp-content/mu-plugins"
+cat > "${WP_PATH}/wp-content/mu-plugins/rar-wso-live-statuses.php" <<'PHP'
+<?php
+add_action( 'init', static function () {
+    foreach ( array(
+        'wc-confirmed'       => 'Confirmed',
+        'wc-order-confirmed' => 'Order Confirmed',
+        'wc-returned'        => 'Returned',
+    ) as $slug => $label ) {
+        register_post_status(
+            $slug,
+            array(
+                'label'                     => $label,
+                'public'                    => true,
+                'exclude_from_search'       => false,
+                'show_in_admin_all_list'    => true,
+                'show_in_admin_status_list' => true,
+                'label_count'               => _n_noop( $label . ' <span class="count">(%s)</span>', $label . ' <span class="count">(%s)</span>' ),
+            )
+        );
+    }
+} );
+add_filter( 'wc_order_statuses', static function ( $statuses ) {
+    $statuses['wc-confirmed']       = 'Confirmed';
+    $statuses['wc-order-confirmed'] = 'Order Confirmed';
+    $statuses['wc-returned']        = 'Returned';
+    return $statuses;
+} );
+PHP
+
 PLUGIN_DIR="${WP_PATH}/wp-content/plugins/rar-woo-stock-order"
 mkdir -p "${PLUGIN_DIR}"
 rsync -a --delete   --exclude='.git'   --exclude='.github'   --exclude='tests'   --exclude='dist'   ./ "${PLUGIN_DIR}/"
 
-echo "== Seed v1.1 state and activate v1.2.0 =="
-"${WP[@]}" eval 'update_option("rar_wso_version","1.1.0"); update_option("rar_wso_settings", array("enabled"=>"yes","staff_slug"=>"staff","default_order_status"=>"processing","allow_price_override"=>"yes","default_shipping"=>"0","dashboard_title"=>"Woo Stock & Order"));'
+echo "== Seed v1.2.0 state and activate v1.2.1 =="
+"${WP[@]}" eval 'update_option("rar_wso_version","1.2.0"); update_option("rar_wso_settings", array("enabled"=>"yes","staff_slug"=>"staff","default_order_status"=>"processing","allow_price_override"=>"yes","default_shipping"=>"0","dashboard_title"=>"Woo Stock & Order"));'
 "${WP[@]}" plugin activate rar-woo-stock-order
 
 VERSION_JSON="$("${WP[@]}" eval '$r=get_role("rar_wso_staff"); echo wp_json_encode(array("version"=>get_option("rar_wso_version"),"settings"=>get_option("rar_wso_settings"),"caps"=>$r ? $r->capabilities : array(),"shop_manager_edit_products"=>get_role("shop_manager") ? get_role("shop_manager")->has_cap("edit_products") : false));')"
-assert_jq "${VERSION_JSON}" '.version=="1.2.0"' "upgrade version migrated to 1.2.0"
+assert_jq "${VERSION_JSON}" '.version=="1.2.1"' "upgrade version migrated to 1.2.1"
 assert_jq "${VERSION_JSON}" '.caps.rar_wso_manage_stock==true and .caps.rar_wso_create_orders==true' "staff stock/order capabilities preserved"
 assert_jq "${VERSION_JSON}" '.shop_manager_edit_products==true' "Shop Manager native product editing preserved"
 
 PLUGIN_VERSION="$("${WP[@]}" plugin get rar-woo-stock-order --field=version)"
-[[ "${PLUGIN_VERSION}" == "1.2.0" ]] || fail "Expected plugin version 1.2.0, got ${PLUGIN_VERSION}"
-echo "PASS: plugin version is 1.2.0"
+[[ "${PLUGIN_VERSION}" == "1.2.1" ]] || fail "Expected plugin version 1.2.1, got ${PLUGIN_VERSION}"
+echo "PASS: plugin version is 1.2.1"
 
 echo "== Validate Bangladesh address data against WooCommerce states =="
 ADDRESS_CHECK="$("${WP[@]}" eval '$bad=array(); foreach(RAR_WSO_Data::districts() as $d){ if(!RAR_WSO_Data::district_to_state_code($d)){ $bad[]=$d; } } echo wp_json_encode(array("districts"=>count(RAR_WSO_Data::districts()),"bad"=>$bad,"dhaka_cities"=>RAR_WSO_Data::city_map()["Dhaka"]??array()));')"
@@ -87,6 +118,8 @@ HIGH_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR High S
 LOW_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Low Stock Product"); $p->set_sku("RARLOW001"); $p->set_regular_price("200"); $p->set_manage_stock(true); $p->set_stock_quantity(5); $p->set_stock_status("instock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
 OUT_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Out Stock Product"); $p->set_sku("RAROUT001"); $p->set_regular_price("300"); $p->set_manage_stock(true); $p->set_stock_quantity(0); $p->set_stock_status("outofstock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
 UNMANAGED_ID="$("${WP[@]}" eval '$p=new WC_Product_Simple(); $p->set_name("RAR Unmanaged Product"); $p->set_sku("RARUNMANAGED"); $p->set_regular_price("80"); $p->set_manage_stock(false); $p->set_stock_status("instock"); $p->set_status("publish"); $p->save(); echo $p->get_id();')"
+CUSTOM_ID="$("${WP[@]}" eval '$o=wc_create_order(); $o->set_billing_first_name("Custom"); $o->set_billing_last_name("Status"); $o->set_total(50); $o->set_status("confirmed"); $o->save(); echo $o->get_id();')"
+echo "PASS: custom WooCommerce order status seeded"
 
 cat > "${WP_PATH}/router.php" <<'PHP'
 <?php
@@ -120,7 +153,7 @@ echo "== Staff login and UI =="
 login_user staff 'StaffPass123!' "${STAFF_COOKIE}" /tmp/rar-wso-staff-login.html
 curl -fsS -b "${STAFF_COOKIE}" "${BASE_URL}/staff/" -o "${STAFF_HTML}"
 
-grep -q 'Secure staff workspace · v1.2.0' "${STAFF_HTML}" || fail "Staff app missing v1.2.0 marker"
+grep -q 'Secure staff workspace · v1.2.1' "${STAFF_HTML}" || fail "Staff app missing v1.2.1 marker"
 grep -q "Today's Date" "${STAFF_HTML}" || fail "Professional dashboard date bar missing"
 grep -q 'Available / Live' "${STAFF_HTML}" || fail "Inventory dashboard cards missing"
 grep -q 'Save & Share' "${STAFF_HTML}" || fail "Save & Share action missing"
@@ -133,17 +166,17 @@ if grep -q '&#2547;' "${STAFF_HTML}" || grep -q '&amp;nbsp;' "${STAFF_HTML}"; th
 fi
 grep -q '"currency":"৳"' "${STAFF_HTML}" || fail "BDT currency symbol not localized as plain Unicode"
 grep -q '"Savar"' "${STAFF_HTML}" || fail "Bangladesh town/upazila data missing from client config"
-echo "PASS: staff UI renders professional v1.2.0 layout with plain BDT currency"
+echo "PASS: staff UI renders professional v1.2.1 layout with plain BDT currency"
 
 STAFF_NONCE="$(extract_nonce "${STAFF_HTML}")"
 [[ -n "${STAFF_NONCE}" ]] || fail "Could not extract staff AJAX nonce"
 
 echo "== Dashboard stats and inventory bands =="
 STATS_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${STAFF_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${STATS_JSON}" '.success==true and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard inventory metrics"
+assert_jq "${STATS_JSON}" '.success==true and .data.today_orders>=1 and .data.all_stock>=4 and .data.available_stock>=2 and .data.available_stock==(.data.high_stock+.data.low_stock) and .data.out_stock>=1 and .data.high_stock>=1 and .data.low_stock>=1 and .data.unmanaged_stock>=1' "dashboard metrics load with custom order statuses"
 
 HIGH_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARHIGH001'   --data-urlencode 'filter=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true" "healthy stock product classification"
+assert_jq "${HIGH_JSON}" ".success==true and .data.items[0].id==${HIGH_ID} and .data.items[0].stock_band==\"high\" and .data.items[0].can_add==true and (.data.items[0].image|length)>0" "healthy stock product classification and image payload"
 
 LOW_JSON="$(curl -sS -b "${STAFF_COOKIE}"   --data-urlencode 'action=rar_wso_products'   --data-urlencode "nonce=${STAFF_NONCE}"   --data-urlencode 'search=RARLOW001'   --data-urlencode 'filter=low'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${LOW_JSON}" ".success==true and .data.items[0].id==${LOW_ID} and .data.items[0].stock_band==\"low\"" "low stock product classification"
@@ -200,7 +233,7 @@ MANAGER_NONCE="$(extract_nonce "${MANAGER_HTML}")"
 [[ -n "${MANAGER_NONCE}" ]] || fail "Could not extract manager AJAX nonce"
 
 MANAGER_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=all'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager All Orders includes staff-created order"
+assert_jq "${MANAGER_ORDERS}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))!=null and ([.data.orders[].id]|index(${CUSTOM_ID}))!=null" "manager All Orders loads standard and custom-status orders"
 
 TODAY_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=today'   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${TODAY_ORDERS}" ".success==true and .data.mode==\"today\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Today's Orders drilldown includes today's order"
@@ -212,7 +245,7 @@ COMPLETED_ORDERS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=r
 assert_jq "${COMPLETED_ORDERS}" ".success==true and .data.mode==\"completed\" and ([.data.orders[].id]|index(${ORDER_ID}))!=null" "manager Completed Orders drilldown includes completed order"
 
 LIVE_JSON="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_manager_orders'   --data-urlencode "nonce=${MANAGER_NONCE}"   --data-urlencode 'mode=live'   "${BASE_URL}/wp-admin/admin-ajax.php")"
-assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null" "completed order disappears from Live Orders"
+assert_jq "${LIVE_JSON}" ".success==true and ([.data.orders[].id]|index(${ORDER_ID}))==null and ([.data.orders[].id]|index(${CUSTOM_ID}))!=null" "Live Orders excludes completed but keeps custom open status"
 
 MANAGER_STATS="$(curl -sS -b "${MANAGER_COOKIE}"   --data-urlencode 'action=rar_wso_stats'   --data-urlencode "nonce=${MANAGER_NONCE}"   "${BASE_URL}/wp-admin/admin-ajax.php")"
 assert_jq "${MANAGER_STATS}" '.success==true and .data.completed_orders>=1 and (.data.analytics.sales|length)==7 and (.data.analytics.week_total|type)=="number" and (.data.analytics.growth_pct|type)=="number"' "manager dashboard analytics payload"
@@ -222,15 +255,17 @@ MANIFEST="$(curl -fsS "${BASE_URL}/rar-wso-manifest.webmanifest")"
 assert_jq "${MANIFEST}" '.display=="standalone" and (.start_url|contains("/staff/"))' "manifest endpoint"
 
 SERVICE_WORKER="$(curl -fsS "${BASE_URL}/rar-wso-sw.js")"
-grep -q "rar-wso-assets-1.2.0-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
+grep -q "rar-wso-assets-1.2.1-r3" <<<"${SERVICE_WORKER}" || fail "Service worker cache version mismatch"
 grep -q "u.pathname.startsWith(STAFF_PATH)" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass authenticated staff HTML"
 grep -q "u.pathname.startsWith('/wp-admin/')" <<<"${SERVICE_WORKER}" || fail "Service worker does not bypass wp-admin"
 echo "PASS: service worker private-cache protections"
 
-JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.2.0")"
+JS_BODY="$(curl -fsS "${BASE_URL}/wp-content/plugins/rar-woo-stock-order/assets/js/staff.js?ver=1.2.1")"
 if grep -q '&#2547;' <<<"${JS_BODY}" || grep -q '&nbsp;' <<<"${JS_BODY}"; then
   fail "Raw BDT HTML entities exist in shipped staff JavaScript"
 fi
-echo "PASS: BDT currency regression guard"
+grep -q "ctx.fillText('IMAGE'" <<<"${JS_BODY}" || fail "Sales Order Slip IMAGE column is missing"
+grep -q "image:product.image" <<<"${JS_BODY}" || fail "Order items do not preserve product image data"
+echo "PASS: BDT currency and slip-image regression guards"
 
-echo "All RAR Woo Stock & Order v1.2.0 runtime smoke tests passed."
+echo "All RAR Woo Stock & Order v1.2.1 runtime smoke tests passed."

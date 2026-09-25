@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 — 2026-09-25
+
+### Dashboard / Manager Fixes
+- Normalized registered WooCommerce order-status slugs before every dashboard, analytics and manager order query.
+- Fixed live stores with custom statuses such as Confirmed / Order Confirmed / Returned causing dashboard data to remain unloaded.
+- Dashboard inventory values now remain available even if a separate order-metric query fails.
+- Added automatic dashboard retry, 60-second refresh and refresh-on-resume behavior.
+- Added clear manager analytics empty / warning states.
+
+### Sales Order Slip
+- Added a dedicated IMAGE column to the PNG Sales Order Slip.
+- Slip table is now: SL | IMAGE | ITEM | QTY | RATE | AMOUNT.
+- Product thumbnail is preserved when an item is added and rendered with an image-safe fallback.
+
 ## 1.2.0 — 2026-09-25
 
 ### Dashboard

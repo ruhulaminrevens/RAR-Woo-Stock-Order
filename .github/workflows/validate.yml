@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - release/v1.2.0
+      - hotfix/v1.2.1
   pull_request:
 
 jobs:
@@ -32,10 +32,10 @@ jobs:
       - name: Validate release metadata
         run: |
           VERSION=$(sed -n 's/^ \* Version: \(.*\)$/\1/p' rar-woo-stock-order.php | head -1)
-          test "$VERSION" = "1.2.0"
-          grep -q '^Stable tag: 1.2.0$' readme.txt
-          grep -q '^## 1.2.0 — 2026-09-25$' CHANGELOG.md
-          grep -q '^# RAR Woo Stock & Order v1.2.0$' RELEASE_NOTES.md
+          test "$VERSION" = "1.2.1"
+          grep -q '^Stable tag: 1.2.1$' readme.txt
+          grep -q '^## 1.2.1 — 2026-09-25$' CHANGELOG.md
+          grep -q '^# RAR Woo Stock & Order v1.2.1$' RELEASE_NOTES.md
 
       - name: Build canonical installable ZIP
         run: |

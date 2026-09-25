@@ -126,13 +126,19 @@ class RAR_WSO_Ajax {
         );
     }
 
-    private function count_orders_by_status( $statuses ) {
-        $registered = array_map(
-            static function ( $key ) {
-                return str_replace( 'wc-', '', $key );
-            },
-            array_keys( wc_get_order_statuses() )
+    private function registered_order_status_slugs() {
+        return array_values(
+            array_map(
+                static function ( $key ) {
+                    return str_replace( 'wc-', '', (string) $key );
+                },
+                array_keys( wc_get_order_statuses() )
+            )
         );
+    }
+
+    private function count_orders_by_status( $statuses ) {
+        $registered = $this->registered_order_status_slugs();
 
         $statuses = array_values( array_intersect( (array) $statuses, $registered ) );
         if ( empty( $statuses ) ) {
@@ -159,7 +165,7 @@ class RAR_WSO_Ajax {
                 'limit'        => -1,
                 'return'       => 'objects',
                 'date_created' => '>=' . $today . ' 00:00:00',
-                'status'       => array_keys( wc_get_order_statuses() ),
+                'status'       => $this->registered_order_status_slugs(),
             )
         );
 
@@ -190,7 +196,7 @@ class RAR_WSO_Ajax {
                 'limit'        => -1,
                 'return'       => 'objects',
                 'date_created' => '>=' . $date_from,
-                'status'       => array_keys( wc_get_order_statuses() ),
+                'status'       => $this->registered_order_status_slugs(),
             )
         );
 
@@ -239,10 +245,52 @@ class RAR_WSO_Ajax {
     public function stats() {
         $this->guard();
 
-        $data = array_merge( $this->order_metrics_today(), $this->inventory_stats() );
+        $data = array_merge(
+            array(
+                'today_orders'       => 0,
+                'today_sales'        => 0.0,
+                'completed_orders'   => 0,
+                'returned_cancelled' => 0,
+            ),
+            $this->inventory_stats()
+        );
+
+        try {
+            $data = array_merge( $data, $this->order_metrics_today() );
+        } catch ( Throwable $e ) {
+            $data['stats_warning'] = __( 'Order metrics are temporarily unavailable.', 'rar-woo-stock-order' );
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error(
+                    'Dashboard order metrics failed: ' . $e->getMessage(),
+                    array( 'source' => 'rar-wso' )
+                );
+            }
+        }
 
         if ( current_user_can( 'manage_woocommerce' ) ) {
-            $data['analytics'] = $this->manager_analytics();
+            try {
+                $data['analytics'] = $this->manager_analytics();
+            } catch ( Throwable $e ) {
+                $labels = array();
+                for ( $i = 6; $i >= 0; $i-- ) {
+                    $labels[] = wp_date( 'D', strtotime( '-' . $i . ' days' ) );
+                }
+
+                $data['analytics'] = array(
+                    'labels'     => $labels,
+                    'sales'      => array_fill( 0, 7, 0.0 ),
+                    'week_total' => 0.0,
+                    'growth_pct' => 0.0,
+                    'warning'    => __( 'Sales analytics are temporarily unavailable.', 'rar-woo-stock-order' ),
+                );
+
+                if ( function_exists( 'wc_get_logger' ) ) {
+                    wc_get_logger()->error(
+                        'Manager analytics failed: ' . $e->getMessage(),
+                        array( 'source' => 'rar-wso' )
+                    );
+                }
+            }
         }
 
         wp_send_json_success( $data );
@@ -814,7 +862,7 @@ class RAR_WSO_Ajax {
             'return'   => 'objects',
             'orderby'  => 'date',
             'order'    => 'DESC',
-            'status'   => array_keys( wc_get_order_statuses() ),
+            'status'   => $this->registered_order_status_slugs(),
         );
 
         if ( 'live' === $mode ) {
@@ -825,12 +873,7 @@ class RAR_WSO_Ajax {
         } elseif ( 'completed' === $mode ) {
             $args['status'] = array( 'completed' );
         } elseif ( 'returns' === $mode ) {
-            $registered     = array_map(
-                static function ( $key ) {
-                    return str_replace( 'wc-', '', $key );
-                },
-                array_keys( wc_get_order_statuses() )
-            );
+            $registered     = $this->registered_order_status_slugs();
             $args['status'] = array_values( array_intersect( array( 'returned', 'cancelled', 'refunded' ), $registered ) );
         }
 

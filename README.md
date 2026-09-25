@@ -7,13 +7,22 @@ Professional mobile-first WooCommerce staff PWA for **inventory control, fast or
 
 ## Current release
 
-**v1.2.0**
+**v1.2.1**
 
 Installable ZIP:
 
-[Download RAR Woo Stock & Order v1.2.0](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.2.0/rar-woo-stock-order-v1.2.0.zip)
+[Download RAR Woo Stock & Order v1.2.1](https://github.com/ruhulaminrevens/RAR-Woo-Stock-Order/releases/download/v1.2.1/rar-woo-stock-order-v1.2.1.zip)
 
-## What v1.2.0 adds
+## v1.2.1 hotfix
+
+- fixes dashboard metrics failing on stores with custom WooCommerce order statuses
+- fixes Manager Control Center order loading / analytics with custom statuses
+- keeps inventory metrics available even if an order-metric query fails
+- adds automatic dashboard retry / refresh behavior
+- adds clear empty/warning states for manager sales analytics
+- adds product thumbnails to PNG Sales Order Slip: **SL | IMAGE | ITEM | QTY | RATE | AMOUNT**
+
+## v1.2.0 feature set
 
 ### Professional dashboard
 
@@ -86,7 +95,7 @@ After saving a WooCommerce order, the app builds a **PNG Sales Order Slip** cont
 
 - order number/date
 - customer/contact/address
-- item list with SL, quantity, rate and amount
+- item list with SL, product image, item, quantity, rate and amount
 - subtotal
 - discount
 - shipping
@@ -195,7 +204,7 @@ Assign the **Woo Stock & Order Staff** role from **Users → All Users**.
 
 ## QA
 
-The v1.2 runtime suite covers:
+The v1.2.1 runtime suite covers:
 
 - v1.1 → v1.2 upgrade
 - 64 Bangladesh district mapping
