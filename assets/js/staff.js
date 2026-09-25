@@ -911,23 +911,22 @@ $('#rar-order-form')?.addEventListener('submit',async event=>{
             '<button type="button" id="rar-slip-share" class="rar-secondary">Share Slip</button></span>';
 
         const slipFile=await buildSlipFile(data,snapshot);
-        const url=objectUrlForFile(slipFile);
+        objectUrlForFile(slipFile);
 
         const download=$('#rar-slip-download');
         if(download){
-            download.onclick=()=>{
-                const a=document.createElement('a');
-                a.href=url;
-                a.download=slipFile.name;
-                a.click();
-            };
+            download.onclick=()=>downloadFile(slipFile);
         }
 
         const share=$('#rar-slip-share');
         if(share)share.onclick=()=>shareFile(slipFile,data.order_num).catch(()=>{});
 
         if(submitMode==='share'){
-            try{await shareFile(slipFile,data.order_num);}catch(_){}
+            try{
+                await shareFile(slipFile,data.order_num);
+            }catch(_){
+                toast('Order saved. Tap Share Slip to open the phone sharing menu.');
+            }
         }
 
         pendingOrderRequestId='';
@@ -996,10 +995,19 @@ function renderManagerOrders(){
 async function loadManagerOrders(mode=managerMode){
     if(!C.isManager)return;
 
-    managerMode=mode==='live'?'live':'all';
+    const allowed=['all','live','today','completed','returns'];
+    managerMode=allowed.includes(mode)?mode:'all';
     const box=$('#rar-manager-orders');
     if(box)box.innerHTML='<div class="rar-empty">Loading orders…</div>';
-    $('#rar-orders-title').textContent=managerMode==='live'?'Live Orders':'All Orders';
+
+    const titles={
+        all:'All Orders',
+        live:'Live Orders',
+        today:"Today's Orders",
+        completed:'Completed Orders',
+        returns:'Returned / Cancelled Orders'
+    };
+    $('#rar-orders-title').textContent=titles[managerMode]||'Orders';
 
     try{
         const data=await api('manager_orders',{mode:managerMode});
