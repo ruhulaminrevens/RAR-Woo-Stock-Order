@@ -320,6 +320,129 @@ final class RAR_WSO_Reports {
         );
     }
 
+    private static function manager_breakdowns( $period ) {
+        $range    = self::period_range( $period );
+        $orders   = self::orders_between( $range['start'], $range['end'] );
+        $products = array();
+        $payments = array();
+        $channels = array();
+        $sales    = 0.0;
+
+        foreach ( $orders as $order ) {
+            if ( ! self::is_sales_order( $order ) ) {
+                continue;
+            }
+
+            $order_total = (float) $order->get_total();
+            $sales      += $order_total;
+
+            $payment_key   = sanitize_key( (string) $order->get_payment_method() );
+            $payment_key   = $payment_key ? $payment_key : 'other';
+            $payment_label = wp_strip_all_tags( (string) $order->get_payment_method_title() );
+            if ( '' === $payment_label ) {
+                $payment_label = 'other' === $payment_key ? __( 'Other', 'rar-woo-stock-order' ) : ucwords( str_replace( array( '-', '_' ), ' ', $payment_key ) );
+            }
+
+            if ( ! isset( $payments[ $payment_key ] ) ) {
+                $payments[ $payment_key ] = array(
+                    'key'    => $payment_key,
+                    'label'  => $payment_label,
+                    'orders' => 0,
+                    'sales'  => 0.0,
+                );
+            }
+            $payments[ $payment_key ]['orders']++;
+            $payments[ $payment_key ]['sales'] += $order_total;
+
+            $channel_key = sanitize_key( (string) $order->get_meta( '_rar_wso_channel' ) );
+            if ( '' === $channel_key ) {
+                $channel_key = sanitize_key( (string) $order->get_created_via() );
+            }
+            if ( '' === $channel_key ) {
+                $channel_key = 'woocommerce';
+            }
+
+            $channel_label = ucwords( str_replace( array( '-', '_' ), ' ', $channel_key ) );
+            if ( 'staff-pwa' === $channel_key || 'rar-wso-staff' === $channel_key ) {
+                $channel_label = __( 'Staff PWA', 'rar-woo-stock-order' );
+            } elseif ( in_array( $channel_key, array( 'checkout', 'store-api', 'woocommerce' ), true ) ) {
+                $channel_label = __( 'WooCommerce', 'rar-woo-stock-order' );
+                $channel_key   = 'woocommerce';
+            }
+
+            if ( ! isset( $channels[ $channel_key ] ) ) {
+                $channels[ $channel_key ] = array(
+                    'key'    => $channel_key,
+                    'label'  => $channel_label,
+                    'orders' => 0,
+                    'sales'  => 0.0,
+                );
+            }
+            $channels[ $channel_key ]['orders']++;
+            $channels[ $channel_key ]['sales'] += $order_total;
+
+            foreach ( $order->get_items( 'line_item' ) as $item ) {
+                $product_id = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
+                $key        = $product_id ? (string) $product_id : md5( $item->get_name() );
+                $qty        = max( 0, (float) $item->get_quantity() );
+                $line_total = max( 0, (float) $item->get_total() );
+
+                if ( ! isset( $products[ $key ] ) ) {
+                    $products[ $key ] = array(
+                        'product_id' => (int) $product_id,
+                        'name'       => wp_strip_all_tags( $item->get_name() ),
+                        'qty'        => 0.0,
+                        'sales'      => 0.0,
+                    );
+                }
+
+                $products[ $key ]['qty']   += $qty;
+                $products[ $key ]['sales'] += $line_total;
+            }
+        }
+
+        usort(
+            $products,
+            static function ( $a, $b ) {
+                if ( abs( $a['qty'] - $b['qty'] ) > 0.0001 ) {
+                    return $a['qty'] < $b['qty'] ? 1 : -1;
+                }
+                return $a['sales'] < $b['sales'] ? 1 : -1;
+            }
+        );
+
+        $normalize_mix = static function ( $rows ) use ( $sales ) {
+            $rows = array_values( $rows );
+            usort(
+                $rows,
+                static function ( $a, $b ) {
+                    return $a['sales'] < $b['sales'] ? 1 : -1;
+                }
+            );
+
+            foreach ( $rows as &$row ) {
+                $row['sales']     = round( (float) $row['sales'], wc_get_price_decimals() );
+                $row['share_pct'] = $sales > 0 ? round( ( $row['sales'] / $sales ) * 100, 1 ) : 0.0;
+            }
+            unset( $row );
+
+            return $rows;
+        };
+
+        $top_products = array_slice( array_values( $products ), 0, 5 );
+        foreach ( $top_products as &$product ) {
+            $product['qty']   = (float) $product['qty'];
+            $product['sales'] = round( (float) $product['sales'], wc_get_price_decimals() );
+        }
+        unset( $product );
+
+        return array(
+            'top_products' => $top_products,
+            'payment_mix'  => $normalize_mix( $payments ),
+            'channel_mix'  => $normalize_mix( $channels ),
+        );
+    }
+
     private static function recent_orders( $is_manager ) {
         $orders = wc_get_orders(
             array(
@@ -461,6 +584,7 @@ final class RAR_WSO_Reports {
                 'week_total' => (float) array_sum( $trend7['sales'] ),
                 'growth_pct' => (float) $previous_week['current']['comparison']['sales_pct'],
             );
+            $payload['manager_breakdowns'] = self::manager_breakdowns( $manager_period );
         }
 
         return $payload;
