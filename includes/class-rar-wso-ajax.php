@@ -271,6 +271,61 @@ class RAR_WSO_Ajax {
         return $expanded;
     }
 
+    private function inventory_product_ids( $filter, $page, $limit ) {
+        global $wpdb;
+
+        $lookup = $wpdb->wc_product_meta_lookup;
+        $posts  = $wpdb->posts;
+
+        $condition = '';
+        switch ( $filter ) {
+            case 'available':
+                $condition = " AND l.stock_status='instock' AND l.stock_quantity > 0";
+                break;
+            case 'out':
+                $condition = " AND (l.stock_status='outofstock' OR (l.stock_quantity IS NOT NULL AND l.stock_quantity <= 0))";
+                break;
+            case 'high':
+                $condition = " AND l.stock_status='instock' AND l.stock_quantity >= 11";
+                break;
+            case 'low':
+                $condition = " AND l.stock_status='instock' AND l.stock_quantity BETWEEN 1 AND 10";
+                break;
+            case 'unmanaged':
+                $condition = " AND l.stock_status='instock' AND l.stock_quantity IS NULL";
+                break;
+        }
+
+        $offset = max( 0, ( $page - 1 ) * $limit );
+        $sql    = "
+            SELECT p.ID
+            FROM {$lookup} l
+            INNER JOIN {$posts} p ON p.ID=l.product_id
+            WHERE p.post_status='publish'
+              AND p.post_type IN ('product','product_variation')
+              AND NOT (
+                p.post_type='product'
+                AND EXISTS (
+                    SELECT 1
+                    FROM {$wpdb->term_relationships} tr
+                    INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id=tr.term_taxonomy_id
+                    INNER JOIN {$wpdb->terms} t ON t.term_id=tt.term_id
+                    WHERE tr.object_id=p.ID AND tt.taxonomy='product_type' AND t.slug='variable'
+                )
+              )
+              {$condition}
+            ORDER BY p.post_title ASC, p.ID ASC
+            LIMIT %d OFFSET %d
+        ";
+
+        return array_map(
+            'absint',
+            $wpdb->get_col(
+                $wpdb->prepare( $sql, $limit + 1, $offset ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            )
+        );
+    }
+
     public function products() {
         $this->guard();
 
@@ -284,75 +339,69 @@ class RAR_WSO_Ajax {
             $filter = 'all';
         }
 
-        $candidates = array();
+        $items    = array();
+        $has_more = false;
 
         if ( '' !== $search ) {
             $data_store = WC_Data_Store::load( 'product' );
-            $ids        = $data_store->search_products( $search, '', true, false, 150 );
+            $ids        = $data_store->search_products( $search, '', true, false, 200 );
+            $seen       = array();
+            $filtered   = array();
 
             foreach ( $ids as $id ) {
                 $product = wc_get_product( $id );
-                if ( $product && 'publish' === get_post_status( $product->get_id() ) ) {
-                    $candidates = array_merge( $candidates, $this->expand_product( $product ) );
+                if ( ! $product || 'publish' !== get_post_status( $product->get_id() ) ) {
+                    continue;
+                }
+
+                foreach ( $this->expand_product( $product ) as $candidate ) {
+                    if ( ! $candidate || isset( $seen[ $candidate->get_id() ] ) ) {
+                        continue;
+                    }
+
+                    $seen[ $candidate->get_id() ] = true;
+
+                    if ( ! $this->matches_filter( $candidate, $filter ) ) {
+                        continue;
+                    }
+
+                    $needle = strtolower( $search );
+                    $name   = strtolower( wp_strip_all_tags( $candidate->get_name() ) );
+                    $sku    = strtolower( (string) $candidate->get_sku() );
+                    if ( false === strpos( $name, $needle ) && false === strpos( $sku, $needle ) ) {
+                        continue;
+                    }
+
+                    $filtered[] = $candidate;
+                }
+            }
+
+            usort(
+                $filtered,
+                static function ( $a, $b ) {
+                    return strcasecmp( $a->get_name(), $b->get_name() );
+                }
+            );
+
+            $offset   = ( $page - 1 ) * $limit;
+            $has_more = count( $filtered ) > ( $offset + $limit );
+
+            foreach ( array_slice( $filtered, $offset, $limit ) as $product ) {
+                $payload = $this->product_payload( $product );
+                if ( $payload ) {
+                    $items[] = $payload;
                 }
             }
         } else {
-            $products = wc_get_products(
-                array(
-                    'status'  => 'publish',
-                    'limit'   => max( 120, $page * $limit * 2 ),
-                    'orderby' => 'name',
-                    'order'   => 'ASC',
-                    'return'  => 'objects',
-                )
-            );
+            $ids      = $this->inventory_product_ids( $filter, $page, $limit );
+            $has_more = count( $ids ) > $limit;
+            $ids      = array_slice( $ids, 0, $limit );
 
-            foreach ( $products as $product ) {
-                $candidates = array_merge( $candidates, $this->expand_product( $product ) );
-            }
-        }
-
-        $seen     = array();
-        $filtered = array();
-
-        foreach ( $candidates as $candidate ) {
-            if ( ! $candidate || isset( $seen[ $candidate->get_id() ] ) ) {
-                continue;
-            }
-
-            $seen[ $candidate->get_id() ] = true;
-
-            if ( ! $this->matches_filter( $candidate, $filter ) ) {
-                continue;
-            }
-
-            if ( '' !== $search ) {
-                $needle = strtolower( $search );
-                $name   = strtolower( wp_strip_all_tags( $candidate->get_name() ) );
-                $sku    = strtolower( (string) $candidate->get_sku() );
-                if ( false === strpos( $name, $needle ) && false === strpos( $sku, $needle ) ) {
-                    continue;
+            foreach ( $ids as $id ) {
+                $payload = $this->product_payload( wc_get_product( $id ) );
+                if ( $payload ) {
+                    $items[] = $payload;
                 }
-            }
-
-            $filtered[] = $candidate;
-        }
-
-        usort(
-            $filtered,
-            static function ( $a, $b ) {
-                return strcasecmp( $a->get_name(), $b->get_name() );
-            }
-        );
-
-        $offset = ( $page - 1 ) * $limit;
-        $slice  = array_slice( $filtered, $offset, $limit );
-        $items  = array();
-
-        foreach ( $slice as $product ) {
-            $payload = $this->product_payload( $product );
-            if ( $payload ) {
-                $items[] = $payload;
             }
         }
 
@@ -360,7 +409,7 @@ class RAR_WSO_Ajax {
             array(
                 'items'    => $items,
                 'page'     => $page,
-                'has_more' => count( $filtered ) > ( $offset + $limit ),
+                'has_more' => $has_more,
                 'filter'   => $filter,
             )
         );
