@@ -297,7 +297,7 @@ function renderRecentOrders(orders){
     const list=Array.isArray(orders)?orders:[];
     box.innerHTML=list.length?list.map(order=>
         '<article class="rar-recent-order">'+
-            '<div class="rar-recent-main"><strong>#'+esc(order.number)+' &nbsp;'+esc(order.customer)+'</strong>'+
+            '<div class="rar-recent-main"><strong>#'+esc(order.number)+' · '+esc(order.customer)+'</strong>'+
             '<small>'+esc(order.created||'')+' · '+esc(order.items||0)+' item'+(Number(order.items||0)===1?'':'s')+(order.city?' · '+esc(order.city):'')+'</small></div>'+
             '<div class="rar-recent-total"><strong>'+esc(money(order.total))+'</strong><small>'+esc(order.payment||'')+'</small></div>'+
             '<span class="rar-status-pill status-'+esc(order.status||'')+'">● '+esc(order.status_label||order.status||'')+'</span>'+
