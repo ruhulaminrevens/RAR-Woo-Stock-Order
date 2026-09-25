@@ -197,17 +197,17 @@ class RAR_WSO_PWA {
     </div>
 
     <div class="rar-stats rar-stats-orders">
-        <button class="rar-stat stat-blue" type="button">
-            <span>Today's Orders</span><strong id="stat-orders">—</strong><small>Total orders today</small>
+        <button class="rar-stat stat-blue" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
+            <span>Today's Orders</span><strong id="stat-orders">—</strong><small><?php echo $is_manager ? 'Tap to view today' : 'Total orders today'; ?></small>
         </button>
-        <button class="rar-stat stat-teal" type="button">
-            <span>Today's Sales</span><strong id="stat-sales">—</strong><small>Total active sales</small>
+        <button class="rar-stat stat-teal" type="button"<?php echo $is_manager ? ' data-orders-mode="today"' : ''; ?>>
+            <span>Today's Sales</span><strong id="stat-sales">—</strong><small><?php echo $is_manager ? 'Tap to view today' : 'Total active sales'; ?></small>
         </button>
-        <button class="rar-stat stat-green" type="button">
-            <span>Completed Orders</span><strong id="stat-completed">—</strong><small>Completed today</small>
+        <button class="rar-stat stat-green" type="button"<?php echo $is_manager ? ' data-orders-mode="completed"' : ''; ?>>
+            <span>Completed Orders</span><strong id="stat-completed">—</strong><small><?php echo $is_manager ? 'Tap to view completed' : 'Total completed orders'; ?></small>
         </button>
-        <button class="rar-stat stat-red" type="button">
-            <span>Returned / Cancelled</span><strong id="stat-returned">—</strong><small>Returned, refunded or cancelled</small>
+        <button class="rar-stat stat-red" type="button"<?php echo $is_manager ? ' data-orders-mode="returns"' : ''; ?>>
+            <span>Returned / Cancelled</span><strong id="stat-returned">—</strong><small><?php echo $is_manager ? 'Tap to view exceptions' : 'Returned, refunded or cancelled'; ?></small>
         </button>
     </div>
 
