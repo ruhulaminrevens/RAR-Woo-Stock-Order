@@ -5,7 +5,7 @@ Requires at least: 6.3
 Tested up to: 6.9
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,7 +13,7 @@ Professional mobile-first WooCommerce staff PWA for stock control, fast order en
 
 == Description ==
 
-RAR Woo Stock & Order v1.2.0 provides:
+RAR Woo Stock & Order v1.2.1 provides:
 
 * Professional dashboard with live date/time and daily order/sales metrics.
 * Clickable All Stock, Available/Live and Out of Stock cards.
@@ -44,6 +44,11 @@ Product add/edit/delete stays in native WooCommerce for Administrator / Shop Man
 7. Open /staff/ and optionally Add to Home Screen.
 
 == Changelog ==
+
+= 1.2.1 =
+* Fixed dashboard and Manager Control Center queries on stores using custom WooCommerce order statuses.
+* Added resilient dashboard retry / refresh behavior and manager chart empty states.
+* Added product IMAGE column to the PNG Sales Order Slip.
 
 = 1.2.0 =
 * Professional dashboard and manager analytics.
