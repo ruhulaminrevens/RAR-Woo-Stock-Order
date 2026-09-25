@@ -9,9 +9,12 @@ class RAR_WSO_Ajax {
             'stats'               => 'stats',
             'products'            => 'products',
             'stock_update'        => 'stock_update',
+            'stock_adjust'        => 'stock_adjust',
+            'stock_history'       => 'stock_history',
             'create_order'        => 'create_order',
             'manager_orders'      => 'manager_orders',
             'update_order_status' => 'update_order_status',
+            'undo_order_status'   => 'undo_order_status',
         ) as $action => $method ) {
             add_action( 'wp_ajax_rar_wso_' . $action, array( $this, $method ) );
         }
@@ -454,6 +457,53 @@ class RAR_WSO_Ajax {
         );
     }
 
+    private function append_stock_movement( $product_id, $old, $new, $source = 'manual' ) {
+        $product_id = absint( $product_id );
+        $user       = wp_get_current_user();
+        $entries    = get_post_meta( $product_id, '_rar_wso_stock_movements', true );
+        $entries    = is_array( $entries ) ? $entries : array();
+
+        $entry = array(
+            'id'        => wp_generate_uuid4(),
+            'time'      => current_time( 'mysql' ),
+            'timestamp' => current_time( 'timestamp' ),
+            'user_id'   => get_current_user_id(),
+            'user'      => $user && $user->exists() ? $user->display_name : __( 'System', 'rar-woo-stock-order' ),
+            'from'      => is_null( $old ) ? null : (float) $old,
+            'to'        => (float) $new,
+            'delta'     => (float) $new - ( is_null( $old ) ? 0.0 : (float) $old ),
+            'source'    => sanitize_key( $source ),
+        );
+
+        array_unshift( $entries, $entry );
+        $entries = array_slice( $entries, 0, 60 );
+
+        update_post_meta( $product_id, '_rar_wso_stock_movements', $entries );
+        update_post_meta( $product_id, '_rar_wso_last_stock_update', wp_json_encode( $entry ) );
+
+        return $entry;
+    }
+
+    private function stock_history_payload( $product_id ) {
+        $entries = get_post_meta( $product_id, '_rar_wso_stock_movements', true );
+        $entries = is_array( $entries ) ? array_slice( $entries, 0, 30 ) : array();
+
+        return array_map(
+            static function ( $entry ) {
+                return array(
+                    'id'     => sanitize_text_field( $entry['id'] ?? '' ),
+                    'time'   => sanitize_text_field( $entry['time'] ?? '' ),
+                    'user'   => sanitize_text_field( $entry['user'] ?? '' ),
+                    'from'   => array_key_exists( 'from', $entry ) && null !== $entry['from'] ? (float) $entry['from'] : null,
+                    'to'     => (float) ( $entry['to'] ?? 0 ),
+                    'delta'  => (float) ( $entry['delta'] ?? 0 ),
+                    'source' => sanitize_key( $entry['source'] ?? 'manual' ),
+                );
+            },
+            $entries
+        );
+    }
+
     public function stock_update() {
         $this->guard( 'rar_wso_manage_stock' );
 
@@ -480,18 +530,7 @@ class RAR_WSO_Ajax {
         $product->set_stock_status( $qty > 0 ? 'instock' : 'outofstock' );
         $product->save();
 
-        update_post_meta(
-            $id,
-            '_rar_wso_last_stock_update',
-            wp_json_encode(
-                array(
-                    'user_id' => get_current_user_id(),
-                    'time'    => current_time( 'mysql' ),
-                    'from'    => is_null( $old ) ? null : (float) $old,
-                    'to'      => $qty,
-                )
-            )
-        );
+        $movement = $this->append_stock_movement( $id, $old, $qty, 'manual_set' );
 
         if ( function_exists( 'wc_get_logger' ) ) {
             wc_get_logger()->info(
@@ -510,8 +549,81 @@ class RAR_WSO_Ajax {
 
         wp_send_json_success(
             array(
-                'message' => __( 'Stock updated.', 'rar-woo-stock-order' ),
+                'message'  => __( 'Stock updated.', 'rar-woo-stock-order' ),
+                'product'  => $this->product_payload( $product ),
+                'movement' => $movement,
+            )
+        );
+    }
+
+    public function stock_adjust() {
+        $this->guard( 'rar_wso_manage_stock' );
+
+        $id    = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+        $delta = isset( $_POST['delta'] ) ? (int) wp_unslash( $_POST['delta'] ) : 0;
+
+        if ( ! $id || ! in_array( $delta, array( -10, -5, -1, 1, 5, 10 ), true ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'A valid product and stock adjustment are required.', 'rar-woo-stock-order' ) ),
+                422
+            );
+        }
+
+        $product = wc_get_product( $id );
+        if ( ! $product ) {
+            wp_send_json_error( array( 'message' => __( 'Product not found.', 'rar-woo-stock-order' ) ), 404 );
+        }
+
+        $old = $product->get_manage_stock() ? $product->get_stock_quantity() : null;
+        $qty = max( 0, ( is_null( $old ) ? 0.0 : (float) $old ) + $delta );
+
+        $product->set_manage_stock( true );
+        $product->set_stock_quantity( $qty );
+        $product->set_stock_status( $qty > 0 ? 'instock' : 'outofstock' );
+        $product->save();
+
+        $movement = $this->append_stock_movement( $id, $old, $qty, 'quick_adjust' );
+
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->info(
+                sprintf(
+                    'Quick stock adjustment product #%d: %s -> %s (%+d) by user #%d',
+                    $id,
+                    is_null( $old ) ? 'unmanaged' : $old,
+                    $qty,
+                    $delta,
+                    get_current_user_id()
+                ),
+                array( 'source' => 'rar-wso' )
+            );
+        }
+
+        do_action( 'rar_wso_stock_updated', $product, $old, $qty, get_current_user_id() );
+
+        wp_send_json_success(
+            array(
+                'message'  => __( 'Stock adjusted.', 'rar-woo-stock-order' ),
+                'product'  => $this->product_payload( $product ),
+                'movement' => $movement,
+                'history'  => $this->stock_history_payload( $id ),
+            )
+        );
+    }
+
+    public function stock_history() {
+        $this->guard( 'rar_wso_manage_stock' );
+
+        $id      = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+        $product = $id ? wc_get_product( $id ) : false;
+
+        if ( ! $product ) {
+            wp_send_json_error( array( 'message' => __( 'Product not found.', 'rar-woo-stock-order' ) ), 404 );
+        }
+
+        wp_send_json_success(
+            array(
                 'product' => $this->product_payload( $product ),
+                'history' => $this->stock_history_payload( $id ),
             )
         );
     }
@@ -891,7 +1003,10 @@ class RAR_WSO_Ajax {
             wp_send_json_error( array( 'message' => __( 'Order not found.', 'rar-woo-stock-order' ) ), 404 );
         }
 
-        if ( $order->get_status() !== $status ) {
+        $previous_status = $order->get_status();
+        $undo             = null;
+
+        if ( $previous_status !== $status ) {
             $order->update_status(
                 $status,
                 sprintf(
@@ -900,11 +1015,87 @@ class RAR_WSO_Ajax {
                 ),
                 true
             );
+
+            $token = sanitize_key( str_replace( '-', '', wp_generate_uuid4() ) );
+            set_transient(
+                'rar_wso_undo_' . $token,
+                array(
+                    'user_id'         => get_current_user_id(),
+                    'order_id'        => $order_id,
+                    'previous_status' => $previous_status,
+                    'current_status'  => $status,
+                ),
+                5 * MINUTE_IN_SECONDS
+            );
+
+            $undo = array(
+                'token'                 => $token,
+                'previous_status'       => $previous_status,
+                'previous_status_label' => wc_get_order_status_name( $previous_status ),
+                'current_status'        => $status,
+            );
         }
 
         wp_send_json_success(
             array(
                 'message' => __( 'Order status updated.', 'rar-woo-stock-order' ),
+                'order'   => $this->manager_order_payload( $order ),
+                'undo'    => $undo,
+            )
+        );
+    }
+
+    public function undo_order_status() {
+        $this->manager_guard();
+
+        $token = isset( $_POST['token'] ) ? sanitize_key( wp_unslash( $_POST['token'] ) ) : '';
+        $data  = $token ? get_transient( 'rar_wso_undo_' . $token ) : false;
+
+        if (
+            ! is_array( $data ) ||
+            absint( $data['user_id'] ?? 0 ) !== get_current_user_id()
+        ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Undo is no longer available for this status change.', 'rar-woo-stock-order' ) ),
+                409
+            );
+        }
+
+        $order = wc_get_order( absint( $data['order_id'] ?? 0 ) );
+        if ( ! $order ) {
+            delete_transient( 'rar_wso_undo_' . $token );
+            wp_send_json_error( array( 'message' => __( 'Order not found.', 'rar-woo-stock-order' ) ), 404 );
+        }
+
+        $current_status  = sanitize_key( $data['current_status'] ?? '' );
+        $previous_status = sanitize_key( $data['previous_status'] ?? '' );
+        $statuses        = wc_get_order_statuses();
+
+        if (
+            $order->get_status() !== $current_status ||
+            ! isset( $statuses[ 'wc-' . $previous_status ] )
+        ) {
+            delete_transient( 'rar_wso_undo_' . $token );
+            wp_send_json_error(
+                array( 'message' => __( 'Order changed again, so this undo can no longer be applied.', 'rar-woo-stock-order' ) ),
+                409
+            );
+        }
+
+        $order->update_status(
+            $previous_status,
+            sprintf(
+                'Status change undone from RAR Woo Stock & Order by %s.',
+                wp_get_current_user()->display_name
+            ),
+            true
+        );
+
+        delete_transient( 'rar_wso_undo_' . $token );
+
+        wp_send_json_success(
+            array(
+                'message' => __( 'Order status change undone.', 'rar-woo-stock-order' ),
                 'order'   => $this->manager_order_payload( $order ),
             )
         );
