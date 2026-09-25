@@ -14,10 +14,13 @@ let pendingOrderRequestId='';
 let stockFilter='all';
 let stockPage=1;
 let stockHasMore=false;
+let stockProducts=new Map();
+let activeStockProductId=0;
 let managerMode='all';
 let managerOrders=[];
 let managerPage=1;
 let managerHasMore=false;
+let managerUndo=new Map();
 let lastSlipUrl='';
 let statsRetryTimer=null;
 let dashboardPeriod='today';
@@ -305,6 +308,37 @@ function renderRecentOrders(orders){
     ).join(''):'<div class="rar-dashboard-empty">No recent orders to show.</div>';
 }
 
+function renderTopProducts(items,label){
+    const box=$('#rar-top-products');
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    setText('#rar-top-products-meta',label?'By quantity · '+label:'By quantity sold');
+
+    box.innerHTML=list.length?list.map((item,index)=>
+        '<div class="rar-breakdown-row">'+
+            '<b>'+(index+1)+'</b>'+
+            '<span><strong>'+esc(item.name||'Product')+'</strong><small>'+esc(formatNumber(item.qty||0))+' sold</small></span>'+
+            '<em>'+esc(money(item.sales||0))+'</em>'+
+        '</div>'
+    ).join(''):'<div class="rar-dashboard-empty">No product sales in this period.</div>';
+}
+
+function renderMix(selector,items){
+    const box=$(selector);
+    if(!box)return;
+
+    const list=Array.isArray(items)?items:[];
+    box.innerHTML=list.length?list.map(item=>{
+        const pct=Math.max(0,Math.min(100,Number(item.share_pct||0)));
+        return '<div class="rar-mix-row">'+
+            '<div><strong>'+esc(item.label||'Other')+'</strong><span>'+esc(item.orders||0)+' order'+(Number(item.orders||0)===1?'':'s')+'</span><em>'+esc(money(item.sales||0))+'</em></div>'+
+            '<div class="rar-mix-track"><i style="width:'+pct+'%"></i></div>'+
+            '<small>'+pct.toFixed(1)+'%</small>'+
+        '</div>';
+    }).join(''):'<div class="rar-dashboard-empty">No data in this period.</div>';
+}
+
 function renderManagerDashboard(data){
     if(!C.isManager)return;
 
@@ -338,6 +372,11 @@ function renderManagerDashboard(data){
     }
 
     renderTrendLine(data.trend||analytics);
+
+    const breakdowns=data.manager_breakdowns||{};
+    renderTopProducts(breakdowns.top_products||[],data.manager_period?.label||'');
+    renderMix('#rar-payment-mix',breakdowns.payment_mix||[]);
+    renderMix('#rar-channel-mix',breakdowns.channel_mix||[]);
 }
 
 function renderDashboard(data){
@@ -466,7 +505,8 @@ function productRow(product){
         '</div>'+
         '<div class="rar-stock-control">'+
             '<input class="stock-qty" type="number" min="0" step="1" inputmode="numeric" placeholder="—" value="'+qtyValue+'">'+
-            '<button data-save="'+product.id+'" type="button">'+buttonText+'</button>'+
+            '<div class="rar-stock-row-actions"><button data-save="'+product.id+'" type="button">'+buttonText+'</button>'+
+            '<button class="rar-stock-open" data-open-stock="'+product.id+'" type="button">Quick</button></div>'+
         '</div>'+
     '</div>';
 }
@@ -490,6 +530,7 @@ async function loadProducts(query='',append=false){
         const data=await api('products',{search:query,filter:stockFilter,page:stockPage});
         if(requestId!==stockRequest)return;
 
+        (data.items||[]).forEach(product=>stockProducts.set(Number(product.id),product));
         const html=(data.items||[]).map(productRow).join('');
         if(append){
             list.insertAdjacentHTML('beforeend',html);
@@ -529,7 +570,158 @@ $('#rar-stock-more')?.addEventListener('click',()=>{
     loadProducts($('#rar-stock-search')?.value.trim()||'',true);
 });
 
+function stockMovementLabel(source){
+    if(source==='quick_adjust')return 'Quick adjust';
+    if(source==='manual_set')return 'Set quantity';
+    return 'Stock change';
+}
+
+function renderStockHistory(history){
+    const box=$('#rar-stock-history');
+    if(!box)return;
+
+    const list=Array.isArray(history)?history:[];
+    box.innerHTML=list.length?list.map(entry=>{
+        const delta=Number(entry.delta||0);
+        const from=entry.from===null?'Not tracked':formatNumber(entry.from);
+        const to=formatNumber(entry.to||0);
+        return '<article class="rar-movement-row">'+
+            '<div><strong>'+esc(stockMovementLabel(entry.source))+'</strong><small>'+esc(entry.time||'')+' · '+esc(entry.user||'')+'</small></div>'+
+            '<div class="rar-movement-values"><span>'+esc(from)+' → '+esc(to)+'</span><b class="'+(delta>0?'up':delta<0?'down':'')+'">'+(delta>0?'+':'')+esc(formatNumber(delta))+'</b></div>'+
+        '</article>';
+    }).join(''):'<div class="rar-dashboard-empty">No manual stock movements recorded yet.</div>';
+}
+
+function syncStockModalProduct(product){
+    if(!product)return;
+    activeStockProductId=Number(product.id||0);
+    stockProducts.set(activeStockProductId,product);
+
+    const image=$('#rar-stock-modal-image');
+    if(image)image.src=product.image||'';
+    setText('#rar-stock-modal-name',product.name||'Product');
+    setText('#rar-stock-modal-sku',product.sku?'SKU '+product.sku:'No SKU');
+
+    const band=$('#rar-stock-modal-band');
+    if(band){
+        band.className='rar-stock-badge band-'+String(product.stock_band||'unmanaged');
+        band.textContent=stockBandLabel(product);
+    }
+
+    const current=product.manage_stock?Number(product.stock_qty||0):0;
+    setText('#rar-stock-modal-current',product.manage_stock?formatNumber(current):'Not tracked');
+    const input=$('#rar-stock-modal-qty');
+    if(input)input.value=product.manage_stock?current:'';
+}
+
+async function loadStockHistory(productId=activeStockProductId){
+    if(!productId)return;
+    const box=$('#rar-stock-history');
+    if(box)box.innerHTML='<div class="rar-dashboard-loading">Loading movement log…</div>';
+
+    try{
+        const data=await api('stock_history',{product_id:productId});
+        syncStockModalProduct(data.product);
+        renderStockHistory(data.history);
+    }catch(error){
+        if(box)box.innerHTML='<div class="rar-dashboard-empty">'+esc(error.message)+'</div>';
+        toast(error.message);
+    }
+}
+
+function openStockModal(product){
+    if(!product)return;
+    const modal=$('#rar-stock-modal');
+    if(!modal)return;
+
+    syncStockModalProduct(product);
+    modal.hidden=false;
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('rar-modal-open');
+    loadStockHistory(product.id);
+}
+
+function closeStockModal(){
+    const modal=$('#rar-stock-modal');
+    if(!modal)return;
+    modal.hidden=true;
+    modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('rar-modal-open');
+    activeStockProductId=0;
+}
+
+$('[data-close-stock-modal]').forEach(button=>button.addEventListener('click',closeStockModal));
+document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&!$('#rar-stock-modal')?.hidden)closeStockModal();
+});
+
+$('#rar-stock-history-refresh')?.addEventListener('click',()=>loadStockHistory());
+
+async function refreshStockViews(product,data){
+    if(product)syncStockModalProduct(product);
+    if(data?.history)renderStockHistory(data.history);
+    stockPage=1;
+    await loadProducts($('#rar-stock-search')?.value.trim()||'',false);
+    loadStats(false);
+}
+
+$('#rar-stock-modal')?.addEventListener('click',async event=>{
+    const quick=event.target.closest('[data-stock-delta]');
+    if(!quick||!activeStockProductId)return;
+
+    const delta=Number(quick.dataset.stockDelta||0);
+    const old=quick.textContent;
+    quick.disabled=true;
+    quick.textContent='…';
+
+    try{
+        const data=await api('stock_adjust',{product_id:activeStockProductId,delta});
+        toast(data.message);
+        await refreshStockViews(data.product,data);
+    }catch(error){
+        toast(error.message);
+    }finally{
+        quick.disabled=false;
+        quick.textContent=old;
+    }
+});
+
+$('#rar-stock-modal-save')?.addEventListener('click',async event=>{
+    if(!activeStockProductId)return;
+    const input=$('#rar-stock-modal-qty');
+    const qty=String(input?.value??'').trim();
+    if(qty===''||Number(qty)<0){
+        toast('Enter a valid stock quantity.');
+        input?.focus();
+        return;
+    }
+
+    const button=event.currentTarget;
+    const old=button.textContent;
+    button.disabled=true;
+    button.textContent='Saving…';
+
+    try{
+        const data=await api('stock_update',{product_id:activeStockProductId,qty});
+        toast(data.message);
+        await loadStockHistory(activeStockProductId);
+        await refreshStockViews(data.product);
+    }catch(error){
+        toast(error.message);
+    }finally{
+        button.disabled=false;
+        button.textContent=old;
+    }
+});
+
 $('#rar-stock-list')?.addEventListener('click',async event=>{
+    const open=event.target.closest('[data-open-stock]');
+    if(open){
+        const product=stockProducts.get(Number(open.dataset.openStock));
+        if(product)openStockModal(product);
+        return;
+    }
+
     const save=event.target.closest('[data-save]');
     if(!save)return;
 
@@ -671,7 +863,7 @@ function renderItems(){
         '</div>'
     ).join('');
 
-    $('#rar-item-count').textContent=items.length;
+    $('#rar-item-count').textContent=items.length+' item'+(items.length===1?'':'s');
     calculateTotals();
 }
 
@@ -1114,7 +1306,7 @@ $('#rar-order-form')?.addEventListener('submit',async event=>{
     const fd=new FormData(form);
     const phone=normalizeBdPhone(fd.get('phone'));
     if(!phone){
-        toast('Enter a valid Bangladesh mobile number, e.g. +8801XXXXXXXXX.');
+        toast('Enter an 11-digit Bangladesh mobile number after +88, e.g. 01700000000.');
         form.elements.namedItem('phone')?.focus();
         return;
     }
@@ -1240,7 +1432,8 @@ function managerOrderRow(order){
         '</div>'+
         '<div class="rar-manager-order-actions">'+
             '<select class="rar-order-status">'+statusOptions(order.status)+'</select>'+
-            '<button type="button" class="rar-primary" data-update-status="'+order.id+'">Update Status</button>'+
+            '<div class="rar-manager-status-buttons"><button type="button" class="rar-primary" data-update-status="'+order.id+'">Update Status</button>'+
+            (managerUndo.has(String(order.id))?'<button type="button" class="rar-secondary rar-undo-status" data-undo-status="'+order.id+'">Undo</button>':'')+'</div>'+
         '</div>'+
     '</article>';
 }
@@ -1322,6 +1515,35 @@ $('#rar-orders-more')?.addEventListener('click',()=>{
 $('#rar-orders-search')?.addEventListener('input',renderManagerOrders);
 
 $('#rar-manager-orders')?.addEventListener('click',async event=>{
+    const undoButton=event.target.closest('[data-undo-status]');
+    if(undoButton){
+        const id=String(undoButton.dataset.undoStatus);
+        const token=managerUndo.get(id);
+        if(!token)return;
+
+        const old=undoButton.textContent;
+        undoButton.disabled=true;
+        undoButton.textContent='Undoing…';
+
+        try{
+            const data=await api('undo_order_status',{token});
+            managerUndo.delete(id);
+            const index=managerOrders.findIndex(order=>String(order.id)===String(data.order.id));
+            if(index>=0)managerOrders[index]=data.order;
+            renderManagerOrders();
+            loadStats(false);
+            toast(data.message);
+        }catch(error){
+            managerUndo.delete(id);
+            renderManagerOrders();
+            toast(error.message);
+        }finally{
+            undoButton.disabled=false;
+            undoButton.textContent=old;
+        }
+        return;
+    }
+
     const button=event.target.closest('[data-update-status]');
     if(!button)return;
 
@@ -1336,17 +1558,16 @@ $('#rar-manager-orders')?.addEventListener('click',async event=>{
             order_id:button.dataset.updateStatus,
             status:select.value
         });
-        toast(data.message);
-        const index=managerOrders.findIndex(order=>String(order.id)===String(data.order.id));
+        const id=String(data.order.id);
+        if(data.undo?.token)managerUndo.set(id,data.undo.token);
+        else managerUndo.delete(id);
+
+        const index=managerOrders.findIndex(order=>String(order.id)===id);
         if(index>=0)managerOrders[index]=data.order;
 
-        if(managerMode==='live'){
-            const closed=['completed','cancelled','refunded','failed','returned'];
-            managerOrders=managerOrders.filter(order=>!closed.includes(order.status));
-        }
-
         renderManagerOrders();
-        loadStats();
+        loadStats(false);
+        toast(data.undo?.token?data.message+' Undo is available for 5 minutes.':data.message);
     }catch(error){
         toast(error.message);
     }finally{
