@@ -1305,7 +1305,7 @@ async function loadManagerOrders(mode=managerMode,append=false){
     }
 }
 
-$('[data-orders-mode]').forEach(button=>{
+$$('[data-orders-mode]').forEach(button=>{
     button.addEventListener('click',()=>{
         if(!C.isManager)return;
         view('orders');
