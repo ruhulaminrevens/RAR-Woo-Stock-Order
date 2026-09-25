@@ -373,6 +373,7 @@ class RAR_WSO_PWA {
         <button type="button" id="rar-orders-refresh" class="rar-secondary">Refresh</button>
     </div>
     <div id="rar-manager-orders" class="rar-manager-orders"></div>
+    <button type="button" id="rar-orders-more" class="rar-secondary rar-load-more" hidden>Load more orders</button>
 </section>
 <?php endif; ?>
 </main>
