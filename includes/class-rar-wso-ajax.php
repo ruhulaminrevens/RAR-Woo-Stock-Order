@@ -126,6 +126,32 @@ class RAR_WSO_Ajax {
         );
     }
 
+    private function count_orders_by_status( $statuses ) {
+        $registered = array_map(
+            static function ( $key ) {
+                return str_replace( 'wc-', '', $key );
+            },
+            array_keys( wc_get_order_statuses() )
+        );
+
+        $statuses = array_values( array_intersect( (array) $statuses, $registered ) );
+        if ( empty( $statuses ) ) {
+            return 0;
+        }
+
+        $result = wc_get_orders(
+            array(
+                'limit'    => 1,
+                'page'     => 1,
+                'paginate' => true,
+                'return'   => 'ids',
+                'status'   => $statuses,
+            )
+        );
+
+        return is_object( $result ) && isset( $result->total ) ? (int) $result->total : 0;
+    }
+
     private function order_metrics_today() {
         $today  = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
         $orders = wc_get_orders(
@@ -138,23 +164,13 @@ class RAR_WSO_Ajax {
         );
 
         $metrics = array(
-            'today_orders'      => 0,
-            'today_sales'       => 0.0,
-            'completed_orders'  => 0,
-            'returned_cancelled'=> 0,
+            'today_orders'       => count( $orders ),
+            'today_sales'        => 0.0,
+            'completed_orders'   => $this->count_orders_by_status( array( 'completed' ) ),
+            'returned_cancelled' => $this->count_orders_by_status( array( 'returned', 'cancelled', 'refunded' ) ),
         );
 
         foreach ( $orders as $order ) {
-            $metrics['today_orders']++;
-
-            if ( $order->has_status( 'completed' ) ) {
-                $metrics['completed_orders']++;
-            }
-
-            if ( $order->has_status( array( 'returned', 'cancelled', 'refunded' ) ) ) {
-                $metrics['returned_cancelled']++;
-            }
-
             if ( ! $order->has_status( array( 'cancelled', 'failed', 'refunded', 'returned' ) ) ) {
                 $metrics['today_sales'] += (float) $order->get_total();
             }
@@ -800,6 +816,19 @@ class RAR_WSO_Ajax {
 
         if ( 'live' === $mode ) {
             $args['status'] = RAR_WSO_Data::live_order_status_slugs();
+        } elseif ( 'today' === $mode ) {
+            $today                = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
+            $args['date_created'] = '>=' . $today . ' 00:00:00';
+        } elseif ( 'completed' === $mode ) {
+            $args['status'] = array( 'completed' );
+        } elseif ( 'returns' === $mode ) {
+            $registered     = array_map(
+                static function ( $key ) {
+                    return str_replace( 'wc-', '', $key );
+                },
+                array_keys( wc_get_order_statuses() )
+            );
+            $args['status'] = array_values( array_intersect( array( 'returned', 'cancelled', 'refunded' ), $registered ) );
         }
 
         $orders = wc_get_orders( $args );
@@ -812,7 +841,7 @@ class RAR_WSO_Ajax {
         wp_send_json_success(
             array(
                 'orders' => $items,
-                'mode'   => 'live' === $mode ? 'live' : 'all',
+                'mode'   => in_array( $mode, array( 'live', 'today', 'completed', 'returns' ), true ) ? $mode : 'all',
             )
         );
     }
